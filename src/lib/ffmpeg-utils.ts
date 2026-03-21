@@ -459,6 +459,312 @@ export async function applyTransitions(
   return blob;
 }
 
+export interface CollageInput {
+  files: File[];
+  layout: "2h" | "2v" | "3h" | "4grid" | "6grid" | "9grid";
+  borderWidth: number;
+  borderColor: string;
+  outputDuration: number;
+}
+
+export async function createCollage(
+  input: CollageInput,
+  onProgress?: (msg: string) => void
+): Promise<Blob> {
+  const ff = await getFFmpeg();
+
+  const { files, layout, outputDuration } = input;
+
+  // Write all input files
+  for (let i = 0; i < files.length; i++) {
+    onProgress?.(`入力ファイル ${i + 1}/${files.length} を読み込み中...`);
+    await ff.writeFile(`collage_in${i}`, await fetchFile(files[i]));
+  }
+
+  // Determine grid dimensions and filter
+  let outW = 1920;
+  let outH = 1080;
+  let filterComplex = "";
+
+  // Scale each input to appropriate cell size, then arrange
+  if (layout === "2h") {
+    // 2 horizontal: side by side 960x1080 each
+    const cellW = 960;
+    const cellH = 1080;
+    outW = 1920; outH = 1080;
+    filterComplex = `[0:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2:black[v0];[1:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2:black[v1];[v0][v1]hstack=inputs=2[out]`;
+  } else if (layout === "2v") {
+    // 2 vertical: stacked 1920x540 each
+    const cellW = 1920;
+    const cellH = 540;
+    outW = 1920; outH = 1080;
+    filterComplex = `[0:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2:black[v0];[1:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2:black[v1];[v0][v1]vstack=inputs=2[out]`;
+  } else if (layout === "3h") {
+    // 3 horizontal: 640x1080 each
+    const cellW = 640;
+    const cellH = 1080;
+    outW = 1920; outH = 1080;
+    filterComplex = `[0:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2:black[v0];[1:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2:black[v1];[2:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2:black[v2];[v0][v1][v2]hstack=inputs=3[out]`;
+  } else if (layout === "4grid") {
+    // 2x2 grid: 960x540 each
+    const cellW = 960;
+    const cellH = 540;
+    outW = 1920; outH = 1080;
+    filterComplex = `[0:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2:black[v0];[1:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2:black[v1];[2:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2:black[v2];[3:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2:black[v3];[v0][v1]hstack[top];[v2][v3]hstack[bottom];[top][bottom]vstack[out]`;
+  } else if (layout === "6grid") {
+    // 2x3 grid: 640x540 each
+    const cellW = 640;
+    const cellH = 540;
+    outW = 1920; outH = 1080;
+    const scales = Array.from({ length: 6 }, (_, i) =>
+      `[${i}:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2:black[v${i}]`
+    ).join(";");
+    filterComplex = `${scales};[v0][v1][v2]hstack=inputs=3[top];[v3][v4][v5]hstack=inputs=3[bottom];[top][bottom]vstack[out]`;
+  } else if (layout === "9grid") {
+    // 3x3 grid: 640x360 each
+    const cellW = 640;
+    const cellH = 360;
+    outW = 1920; outH = 1080;
+    const scales = Array.from({ length: 9 }, (_, i) =>
+      `[${i}:v]scale=${cellW}:${cellH}:force_original_aspect_ratio=decrease,pad=${cellW}:${cellH}:(ow-iw)/2:(oh-ih)/2:black[v${i}]`
+    ).join(";");
+    filterComplex = `${scales};[v0][v1][v2]hstack=inputs=3[r0];[v3][v4][v5]hstack=inputs=3[r1];[v6][v7][v8]hstack=inputs=3[r2];[r0][r1][r2]vstack=inputs=3[out]`;
+  }
+
+  // Build input args
+  const inputArgs: string[] = [];
+  for (let i = 0; i < files.length; i++) {
+    inputArgs.push("-stream_loop", "-1", "-t", outputDuration.toString(), "-i", `collage_in${i}`);
+  }
+
+  // Build audio mix filter
+  const audioInputs = files.map((_, i) => `[${i}:a]`).join("");
+  const fullFilter = `${filterComplex};${audioInputs}amix=inputs=${files.length}:duration=first[aout]`;
+
+  onProgress?.("コラージュを作成中...");
+
+  await ff.exec([
+    ...inputArgs,
+    "-filter_complex", fullFilter,
+    "-map", "[out]",
+    "-map", "[aout]",
+    "-t", outputDuration.toString(),
+    "-s", `${outW}x${outH}`,
+    "-c:v", "libx264",
+    "-c:a", "aac",
+    "-preset", "ultrafast",
+    "collage_out.mp4"
+  ]);
+
+  const result = await ff.readFile("collage_out.mp4");
+  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+
+  // Cleanup
+  for (let i = 0; i < files.length; i++) {
+    await ff.deleteFile(`collage_in${i}`);
+  }
+  await ff.deleteFile("collage_out.mp4");
+
+  return blob;
+}
+
+export interface SlideshowInput {
+  images: { file: File; duration: number }[];
+  transition: "none" | "fade" | "crossfade";
+  transitionDuration: number;
+}
+
+export async function createSlideshow(
+  input: SlideshowInput,
+  onProgress?: (msg: string) => void
+): Promise<Blob> {
+  const ff = await getFFmpeg();
+
+  const { images, transition, transitionDuration } = input;
+
+  for (let i = 0; i < images.length; i++) {
+    onProgress?.(`画像 ${i + 1}/${images.length} を読み込み中...`);
+    await ff.writeFile(`slide_in${i}`, await fetchFile(images[i].file));
+  }
+
+  onProgress?.("スライドショーを作成中...");
+
+  // Build input args: each image is a looped still
+  const inputArgs: string[] = [];
+  for (let i = 0; i < images.length; i++) {
+    inputArgs.push("-loop", "1", "-t", images[i].duration.toString(), "-i", `slide_in${i}`);
+  }
+
+  const scaleFilter = "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,setsar=1";
+
+  let filterComplex = "";
+  let mapLabel = "";
+
+  if (transition === "none" || images.length === 1) {
+    // Simple concat
+    const scaleParts = images.map((_, i) => `[${i}:v]${scaleFilter}[sv${i}]`).join(";");
+    const concatInputs = images.map((_, i) => `[sv${i}]`).join("");
+    filterComplex = `${scaleParts};${concatInputs}concat=n=${images.length}:v=1:a=0[out]`;
+    mapLabel = "[out]";
+  } else {
+    // xfade transitions between images
+    const scaleParts = images.map((_, i) => `[${i}:v]${scaleFilter},fps=25[sv${i}]`).join(";");
+    filterComplex = scaleParts;
+
+    // Chain xfade between consecutive images
+    // xfade offset = cumulative duration of previous images minus transitionDuration overlap
+    let currentLabel = "sv0";
+    let cumulativeDuration = images[0].duration;
+
+    for (let i = 1; i < images.length; i++) {
+      const offset = Math.max(0, cumulativeDuration - transitionDuration);
+      const nextLabel = i === images.length - 1 ? "out" : `xf${i}`;
+      const xfadeType = transition === "crossfade" ? "fade" : "fade";
+      filterComplex += `;[${currentLabel}][sv${i}]xfade=transition=${xfadeType}:duration=${transitionDuration}:offset=${offset.toFixed(3)}[${nextLabel}]`;
+      currentLabel = nextLabel;
+      cumulativeDuration += images[i].duration - transitionDuration;
+    }
+    mapLabel = "[out]";
+  }
+
+  await ff.exec([
+    ...inputArgs,
+    "-filter_complex", filterComplex,
+    "-map", mapLabel,
+    "-an",
+    "-c:v", "libx264",
+    "-preset", "ultrafast",
+    "-pix_fmt", "yuv420p",
+    "slideshow_out.mp4"
+  ]);
+
+  const result = await ff.readFile("slideshow_out.mp4");
+  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+
+  for (let i = 0; i < images.length; i++) {
+    await ff.deleteFile(`slide_in${i}`);
+  }
+  await ff.deleteFile("slideshow_out.mp4");
+
+  return blob;
+}
+
+export interface PipInput {
+  mainFile: File;
+  pipFile: File;
+  position: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  size: number; // percentage of main video width (15-50)
+  borderWidth: number;
+  borderColor: string;
+  startTime: number;
+  endTime: number;
+}
+
+export async function applyPip(
+  input: PipInput,
+  onProgress?: (msg: string) => void
+): Promise<Blob> {
+  const ff = await getFFmpeg();
+
+  await ff.writeFile("pip_main", await fetchFile(input.mainFile));
+  await ff.writeFile("pip_sub", await fetchFile(input.pipFile));
+
+  onProgress?.("ワイプを適用中...");
+
+  const { position, size, startTime, endTime, borderWidth, borderColor } = input;
+  const sizeRatio = size / 100;
+
+  // Scale pip video relative to main video width
+  let scaleFilter = `[1:v]scale=iw*0:ih*0[pip_scaled]`; // placeholder
+  // Use expression: pip width = main_width * sizeRatio
+  const pipW = `(W*${sizeRatio.toFixed(3)})`;
+  scaleFilter = `[1:v]scale=${pipW}:-1[pip_scaled]`;
+
+  // Determine overlay position
+  let x = "10";
+  let y = "10";
+  if (position === "top-right") {
+    x = `W-w-10`;
+    y = "10";
+  } else if (position === "bottom-left") {
+    x = "10";
+    y = `H-h-10`;
+  } else if (position === "bottom-right") {
+    x = `W-w-10`;
+    y = `H-h-10`;
+  }
+
+  let filterComplex = "";
+  if (borderWidth > 0) {
+    // Add border by padding the pip video
+    filterComplex = `${scaleFilter};[pip_scaled]pad=iw+${borderWidth * 2}:ih+${borderWidth * 2}:${borderWidth}:${borderWidth}:${borderColor}[pip_bordered];[0:v][pip_bordered]overlay=${x}:${y}:enable='between(t,${startTime},${endTime})'[out]`;
+  } else {
+    filterComplex = `${scaleFilter};[0:v][pip_scaled]overlay=${x}:${y}:enable='between(t,${startTime},${endTime})'[out]`;
+  }
+
+  await ff.exec([
+    "-i", "pip_main",
+    "-i", "pip_sub",
+    "-filter_complex", filterComplex,
+    "-map", "[out]",
+    "-map", "0:a?",
+    "-c:v", "libx264",
+    "-c:a", "aac",
+    "-preset", "ultrafast",
+    "pip_out.mp4"
+  ]);
+
+  const result = await ff.readFile("pip_out.mp4");
+  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+
+  await ff.deleteFile("pip_main");
+  await ff.deleteFile("pip_sub");
+  await ff.deleteFile("pip_out.mp4");
+
+  return blob;
+}
+
+export interface GifExportInput {
+  file: File;
+  startTime: number;
+  endTime: number;
+  fps: number;
+  width: number;
+}
+
+export async function exportGif(
+  input: GifExportInput,
+  onProgress?: (msg: string) => void
+): Promise<Blob> {
+  const ff = await getFFmpeg();
+
+  await ff.writeFile("gif_input", await fetchFile(input.file));
+
+  onProgress?.("GIFを作成中...");
+
+  const { startTime, endTime, fps, width } = input;
+  const duration = endTime - startTime;
+
+  const vfFilter = `fps=${fps},scale=${width}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse`;
+
+  await ff.exec([
+    "-ss", startTime.toFixed(3),
+    "-t", duration.toFixed(3),
+    "-i", "gif_input",
+    "-vf", vfFilter,
+    "-loop", "0",
+    "output.gif"
+  ]);
+
+  const result = await ff.readFile("output.gif");
+  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "image/gif" });
+
+  await ff.deleteFile("gif_input");
+  await ff.deleteFile("output.gif");
+
+  return blob;
+}
+
 export async function exportWithAspectRatio(
   file: File,
   width: number,

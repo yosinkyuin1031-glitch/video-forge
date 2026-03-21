@@ -54,7 +54,50 @@ export const ASPECT_PRESETS: AspectRatioPreset[] = [
   { label: "Instagram広告", platform: "Instagram", ratio: "4:5", width: 1080, height: 1350 },
 ];
 
-export type EditorTool = "select" | "text" | "trim" | "silence" | "bgm" | "subtitle" | "export" | "speed" | "split" | "filter" | "transition" | "sticker";
+export type EditorTool = "select" | "text" | "trim" | "silence" | "bgm" | "subtitle" | "export" | "speed" | "split" | "filter" | "transition" | "sticker" | "collage" | "slideshow" | "pip";
+
+export type CollageLayout = "2h" | "2v" | "3h" | "4grid" | "6grid" | "9grid";
+
+export interface CollageItem {
+  id: string;
+  file: File | null;
+  url: string;
+}
+
+export interface CollageSettings {
+  layout: CollageLayout;
+  items: CollageItem[];
+  borderWidth: number; // 0-10px
+  borderColor: string;
+  outputDuration: number; // seconds
+}
+
+export interface SlideshowImage {
+  id: string;
+  file: File;
+  url: string;
+  duration: number; // seconds per image, default 3
+}
+
+export interface SlideshowSettings {
+  images: SlideshowImage[];
+  transition: "none" | "fade" | "crossfade";
+  transitionDuration: number; // 0.5-2 seconds
+}
+
+export type PipPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+
+export interface PipSettings {
+  file: File | null;
+  url: string;
+  position: PipPosition;
+  size: number; // 15-50 percentage of main video width
+  borderRadius: number; // 0-50 for rounded corners
+  borderWidth: number;
+  borderColor: string;
+  startTime: number;
+  endTime: number;
+}
 
 export type TransitionType = "none" | "fade" | "crossfade" | "wipe-left" | "wipe-right" | "zoom";
 

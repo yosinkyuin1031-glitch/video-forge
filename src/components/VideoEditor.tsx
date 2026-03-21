@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { TextOverlay, SubtitleEntry, EditorTool, ASPECT_PRESETS, FONT_OPTIONS, ClipMarker, FilterSettings, TransitionSetting, TransitionType, StickerOverlay } from "@/lib/types";
-import { detectSilence, removeSilence, trimVideo, addBgm, exportWithAspectRatio, SilentSegment, changeSpeed, splitAndReorder, applyFilters, applyTransitions } from "@/lib/ffmpeg-utils";
+import { TextOverlay, SubtitleEntry, EditorTool, ASPECT_PRESETS, FONT_OPTIONS, ClipMarker, FilterSettings, TransitionSetting, TransitionType, StickerOverlay, CollageLayout, CollageItem, CollageSettings, SlideshowImage, SlideshowSettings, PipSettings } from "@/lib/types";
+import { detectSilence, removeSilence, trimVideo, addBgm, exportWithAspectRatio, SilentSegment, changeSpeed, splitAndReorder, applyFilters, applyTransitions, createCollage, createSlideshow, applyPip, exportGif } from "@/lib/ffmpeg-utils";
 
 // ===== UNDO/REDO HISTORY =====
 interface HistoryState {
@@ -364,6 +364,218 @@ export default function VideoEditor() {
   const deleteSticker = (id: string) => {
     setStickers((prev) => prev.filter((s) => s.id !== id));
     if (editingStickerId === id) setEditingStickerId(null);
+  };
+
+  // ===== COLLAGE =====
+  const COLLAGE_LAYOUT_OPTIONS: { key: CollageLayout; label: string; count: number; icon: string }[] = [
+    { key: "2h", label: "2分割(横)", count: 2, icon: "⬛⬛" },
+    { key: "2v", label: "2分割(縦)", count: 2, icon: "⬛\n⬛" },
+    { key: "3h", label: "3分割", count: 3, icon: "⬛⬛⬛" },
+    { key: "4grid", label: "4分割(2x2)", count: 4, icon: "⬛⬛\n⬛⬛" },
+    { key: "6grid", label: "6分割(2x3)", count: 6, icon: "⬛⬛⬛\n⬛⬛⬛" },
+    { key: "9grid", label: "9分割(3x3)", count: 9, icon: "⬛⬛⬛\n⬛⬛⬛\n⬛⬛⬛" },
+  ];
+
+  const makeCollageItems = (count: number): CollageItem[] =>
+    Array.from({ length: count }, (_, i) => ({ id: `ci-${Date.now()}-${i}`, file: null, url: "" }));
+
+  const [collageSettings, setCollageSettings] = useState<CollageSettings>({
+    layout: "2h",
+    items: makeCollageItems(2),
+    borderWidth: 2,
+    borderColor: "#000000",
+    outputDuration: 10,
+  });
+  const collageFileRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const handleCollageLayoutChange = (layout: CollageLayout, count: number) => {
+    setCollageSettings((prev) => ({
+      ...prev,
+      layout,
+      items: Array.from({ length: count }, (_, i) => prev.items[i] ?? { id: `ci-${Date.now()}-${i}`, file: null, url: "" }),
+    }));
+  };
+
+  const handleCollageFileSelect = (index: number, file: File) => {
+    const url = URL.createObjectURL(file);
+    setCollageSettings((prev) => {
+      const newItems = [...prev.items];
+      newItems[index] = { ...newItems[index], file, url };
+      return { ...prev, items: newItems };
+    });
+  };
+
+  const handleCreateCollage = async () => {
+    const { items, layout, borderWidth, borderColor, outputDuration } = collageSettings;
+    const readyFiles = items.filter((item) => item.file !== null).map((item) => item.file as File);
+    const layoutOption = COLLAGE_LAYOUT_OPTIONS.find((o) => o.key === layout);
+    if (!layoutOption || readyFiles.length < layoutOption.count) {
+      setProgressMsg(`すべてのスロット(${layoutOption?.count}個)に動画をアップロードしてください`);
+      return;
+    }
+    await ensureFFmpeg();
+    setProcessing(true);
+    try {
+      const blob = await createCollage({ files: readyFiles, layout, borderWidth, borderColor, outputDuration }, setProgressMsg);
+      const newFile = new File([blob], "collage.mp4", { type: "video/mp4" });
+      const newUrl = URL.createObjectURL(blob);
+      setVideoFile(newFile);
+      setVideoUrl(newUrl);
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      setProgressMsg("コラージュ作成完了!");
+    } catch (e) {
+      setProgressMsg("コラージュ作成に失敗しました");
+    }
+    setProcessing(false);
+  };
+
+  // ===== SLIDESHOW =====
+  const [slideshowSettings, setSlideshowSettings] = useState<SlideshowSettings>({
+    images: [],
+    transition: "none",
+    transitionDuration: 0.5,
+  });
+  const slideshowFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSlideshowImagesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const newImages: SlideshowImage[] = files.map((file) => ({
+      id: `si-${Date.now()}-${Math.random()}`,
+      file,
+      url: URL.createObjectURL(file),
+      duration: 3,
+    }));
+    setSlideshowSettings((prev) => ({ ...prev, images: [...prev.images, ...newImages] }));
+    e.target.value = "";
+  };
+
+  const handleSlideshowImageMove = (index: number, dir: "up" | "down") => {
+    setSlideshowSettings((prev) => {
+      const arr = [...prev.images];
+      const swapIdx = dir === "up" ? index - 1 : index + 1;
+      if (swapIdx < 0 || swapIdx >= arr.length) return prev;
+      [arr[index], arr[swapIdx]] = [arr[swapIdx], arr[index]];
+      return { ...prev, images: arr };
+    });
+  };
+
+  const handleSlideshowImageDelete = (id: string) => {
+    setSlideshowSettings((prev) => ({ ...prev, images: prev.images.filter((img) => img.id !== id) }));
+  };
+
+  const handleSlideshowImageDuration = (id: string, duration: number) => {
+    setSlideshowSettings((prev) => ({
+      ...prev,
+      images: prev.images.map((img) => (img.id === id ? { ...img, duration } : img)),
+    }));
+  };
+
+  const handleCreateSlideshow = async () => {
+    if (slideshowSettings.images.length < 1) {
+      setProgressMsg("1枚以上の画像をアップロードしてください");
+      return;
+    }
+    await ensureFFmpeg();
+    setProcessing(true);
+    try {
+      const blob = await createSlideshow({
+        images: slideshowSettings.images.map((img) => ({ file: img.file, duration: img.duration })),
+        transition: slideshowSettings.transition,
+        transitionDuration: slideshowSettings.transitionDuration,
+      }, setProgressMsg);
+      const newFile = new File([blob], "slideshow.mp4", { type: "video/mp4" });
+      const newUrl = URL.createObjectURL(blob);
+      setVideoFile(newFile);
+      setVideoUrl(newUrl);
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      setProgressMsg("スライドショー作成完了!");
+    } catch (e) {
+      setProgressMsg("スライドショー作成に失敗しました");
+    }
+    setProcessing(false);
+  };
+
+  // ===== PIP =====
+  const [pipSettings, setPipSettings] = useState<PipSettings>({
+    file: null,
+    url: "",
+    position: "bottom-right",
+    size: 25,
+    borderRadius: 0,
+    borderWidth: 2,
+    borderColor: "#ffffff",
+    startTime: 0,
+    endTime: 0,
+  });
+  const pipFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePipFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPipSettings((prev) => ({ ...prev, file, url: URL.createObjectURL(file) }));
+  };
+
+  const handleApplyPip = async () => {
+    if (!videoFile || !pipSettings.file) {
+      setProgressMsg("メイン動画とワイプ動画が必要です");
+      return;
+    }
+    await ensureFFmpeg();
+    setProcessing(true);
+    try {
+      const pipEnd = pipSettings.endTime > pipSettings.startTime ? pipSettings.endTime : duration;
+      const blob = await applyPip({
+        mainFile: videoFile,
+        pipFile: pipSettings.file,
+        position: pipSettings.position,
+        size: pipSettings.size,
+        borderWidth: pipSettings.borderWidth,
+        borderColor: pipSettings.borderColor,
+        startTime: pipSettings.startTime,
+        endTime: pipEnd,
+      }, setProgressMsg);
+      const newFile = new File([blob], "pip.mp4", { type: "video/mp4" });
+      const newUrl = URL.createObjectURL(blob);
+      setVideoFile(newFile);
+      setVideoUrl(newUrl);
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      setProgressMsg("ワイプ適用完了!");
+    } catch (e) {
+      setProgressMsg("ワイプ適用に失敗しました");
+    }
+    setProcessing(false);
+  };
+
+  // ===== GIF EXPORT =====
+  const [gifStart, setGifStart] = useState(0);
+  const [gifEnd, setGifEnd] = useState(10);
+  const [gifFps, setGifFps] = useState(15);
+  const [gifWidth, setGifWidth] = useState(480);
+
+  const handleExportGif = async () => {
+    if (!videoFile) return;
+    await ensureFFmpeg();
+    setProcessing(true);
+    try {
+      const blob = await exportGif({
+        file: videoFile,
+        startTime: gifStart,
+        endTime: Math.min(gifEnd, duration),
+        fps: gifFps,
+        width: gifWidth,
+      }, setProgressMsg);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `videoforge_${Date.now()}.gif`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setProgressMsg("GIF書き出し完了!");
+    } catch (e) {
+      setProgressMsg("GIF書き出しに失敗しました");
+    }
+    setProcessing(false);
   };
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -855,6 +1067,9 @@ export default function VideoEditor() {
     { key: "transition", label: "トランジション", icon: "✨" },
     { key: "filter", label: "フィルター", icon: "🎨" },
     { key: "sticker", label: "スタンプ", icon: "😀" },
+    { key: "collage", label: "コラージュ", icon: "🖼" },
+    { key: "slideshow", label: "スライドショー", icon: "🎞" },
+    { key: "pip", label: "ワイプ", icon: "📺" },
     { key: "export", label: "書き出し", icon: "📤" },
   ];
 
@@ -2220,6 +2435,342 @@ export default function VideoEditor() {
           </div>
         )}
 
+        {/* Collage Tool */}
+        {activeTool === "collage" && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-gray-200">コラージュ動画</h3>
+            <p className="text-xs text-gray-500">複数の動画を分割画面で同時再生します。メイン動画とは独立して新しい動画を作成します。</p>
+
+            {/* Layout selector */}
+            <div>
+              <label className="text-xs text-gray-400 block mb-2">レイアウト</label>
+              <div className="grid grid-cols-3 gap-2">
+                {COLLAGE_LAYOUT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.key}
+                    onClick={() => handleCollageLayoutChange(opt.key, opt.count)}
+                    className={`py-2 px-1 rounded-xl text-xs font-medium transition-all ${
+                      collageSettings.layout === opt.key
+                        ? "bg-indigo-600 text-white"
+                        : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Video slots */}
+            <div>
+              <label className="text-xs text-gray-400 block mb-2">動画スロット</label>
+              <div className="grid grid-cols-2 gap-2">
+                {collageSettings.items.map((item, index) => (
+                  <div key={item.id} className="relative">
+                    <button
+                      onClick={() => collageFileRefs.current[index]?.click()}
+                      className="w-full aspect-video bg-gray-800 border-2 border-dashed border-gray-600 rounded-xl flex flex-col items-center justify-center hover:border-indigo-500 transition-colors overflow-hidden"
+                    >
+                      {item.url ? (
+                        <video src={item.url} className="w-full h-full object-cover" muted />
+                      ) : (
+                        <>
+                          <span className="text-2xl">+</span>
+                          <span className="text-[10px] text-gray-500 mt-1">動画 {index + 1}</span>
+                        </>
+                      )}
+                    </button>
+                    <input
+                      type="file"
+                      accept="video/*"
+                      className="hidden"
+                      ref={(el) => { collageFileRefs.current[index] = el; }}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) handleCollageFileSelect(index, f);
+                        e.target.value = "";
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Border settings */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">ボーダー幅 ({collageSettings.borderWidth}px)</label>
+                <input
+                  type="range" min={0} max={10}
+                  value={collageSettings.borderWidth}
+                  onChange={(e) => setCollageSettings((p) => ({ ...p, borderWidth: parseInt(e.target.value) }))}
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">ボーダー色</label>
+                <input
+                  type="color"
+                  value={collageSettings.borderColor}
+                  onChange={(e) => setCollageSettings((p) => ({ ...p, borderColor: e.target.value }))}
+                  className="w-full h-8 rounded border border-gray-700 cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* Output duration */}
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">出力時間 ({collageSettings.outputDuration}秒)</label>
+              <input
+                type="range" min={1} max={60}
+                value={collageSettings.outputDuration}
+                onChange={(e) => setCollageSettings((p) => ({ ...p, outputDuration: parseInt(e.target.value) }))}
+                className="w-full"
+              />
+            </div>
+
+            <button
+              onClick={handleCreateCollage}
+              disabled={processing}
+              className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+            >
+              {processing ? "作成中..." : "コラージュを作成"}
+            </button>
+          </div>
+        )}
+
+        {/* Slideshow Tool */}
+        {activeTool === "slideshow" && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-gray-200">スライドショー</h3>
+            <p className="text-xs text-gray-500">複数の画像から動画を作成します。メイン動画とは独立して新しい動画を作成します。</p>
+
+            {/* Upload area */}
+            <button
+              onClick={() => slideshowFileInputRef.current?.click()}
+              className="w-full p-4 border-2 border-dashed border-gray-700 rounded-xl text-center hover:border-indigo-500 transition-colors"
+            >
+              <span className="text-2xl block mb-1">🖼</span>
+              <span className="text-xs text-gray-400">画像をアップロード（複数選択可）</span>
+            </button>
+            <input
+              ref={slideshowFileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleSlideshowImagesUpload}
+              className="hidden"
+            />
+
+            {/* Total duration display */}
+            {slideshowSettings.images.length > 0 && (
+              <p className="text-xs text-indigo-400">
+                合計時間: {slideshowSettings.images.reduce((s, img) => s + img.duration, 0).toFixed(1)}秒 ({slideshowSettings.images.length}枚)
+              </p>
+            )}
+
+            {/* Image list */}
+            {slideshowSettings.images.length > 0 && (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {slideshowSettings.images.map((img, index) => (
+                  <div key={img.id} className="flex items-center gap-2 bg-gray-800 rounded-xl p-2">
+                    <img src={img.url} className="w-12 h-9 object-cover rounded" alt="" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] text-gray-500 truncate">{img.file.name}</p>
+                      <div className="flex items-center gap-1 mt-1">
+                        <span className="text-[10px] text-gray-500 w-12">{img.duration}秒</span>
+                        <input
+                          type="range" min={0.5} max={10} step={0.5}
+                          value={img.duration}
+                          onChange={(e) => handleSlideshowImageDuration(img.id, parseFloat(e.target.value))}
+                          className="flex-1"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <button
+                        onClick={() => handleSlideshowImageMove(index, "up")}
+                        disabled={index === 0}
+                        className="w-5 h-5 bg-gray-700 rounded text-gray-400 text-[10px] disabled:opacity-30 hover:bg-gray-600"
+                      >↑</button>
+                      <button
+                        onClick={() => handleSlideshowImageMove(index, "down")}
+                        disabled={index === slideshowSettings.images.length - 1}
+                        className="w-5 h-5 bg-gray-700 rounded text-gray-400 text-[10px] disabled:opacity-30 hover:bg-gray-600"
+                      >↓</button>
+                    </div>
+                    <button
+                      onClick={() => handleSlideshowImageDelete(img.id)}
+                      className="w-6 h-6 bg-red-900/50 rounded text-red-400 text-xs hover:bg-red-800/50"
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Transition settings */}
+            <div>
+              <label className="text-xs text-gray-400 block mb-2">トランジション</label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {([
+                  { value: "none", label: "なし" },
+                  { value: "fade", label: "フェード" },
+                  { value: "crossfade", label: "クロスフェード" },
+                ] as const).map((t) => (
+                  <button
+                    key={t.value}
+                    onClick={() => setSlideshowSettings((p) => ({ ...p, transition: t.value }))}
+                    className={`py-2 rounded-xl text-xs font-medium transition-all ${
+                      slideshowSettings.transition === t.value
+                        ? "bg-indigo-600 text-white"
+                        : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              {slideshowSettings.transition !== "none" && (
+                <div className="mt-2">
+                  <label className="text-[10px] text-gray-500 block mb-1">
+                    トランジション時間 ({slideshowSettings.transitionDuration.toFixed(1)}秒)
+                  </label>
+                  <input
+                    type="range" min={0.5} max={2} step={0.1}
+                    value={slideshowSettings.transitionDuration}
+                    onChange={(e) => setSlideshowSettings((p) => ({ ...p, transitionDuration: parseFloat(e.target.value) }))}
+                    className="w-full"
+                  />
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={handleCreateSlideshow}
+              disabled={processing || slideshowSettings.images.length === 0}
+              className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+            >
+              {processing ? "作成中..." : "スライドショーを作成"}
+            </button>
+          </div>
+        )}
+
+        {/* PiP Tool */}
+        {activeTool === "pip" && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-gray-200">ワイプ (ピクチャーインピクチャー)</h3>
+            <p className="text-xs text-gray-500">メイン動画の上に小さな動画を重ねます</p>
+
+            {/* PiP video upload */}
+            <button
+              onClick={() => pipFileInputRef.current?.click()}
+              className="w-full p-4 border-2 border-dashed border-gray-700 rounded-xl text-center hover:border-indigo-500 transition-colors"
+            >
+              <span className="text-2xl block mb-1">📺</span>
+              <span className="text-xs text-gray-400">
+                {pipSettings.file ? pipSettings.file.name : "ワイプ動画を選択"}
+              </span>
+            </button>
+            <input
+              ref={pipFileInputRef}
+              type="file"
+              accept="video/*"
+              onChange={handlePipFileSelect}
+              className="hidden"
+            />
+
+            {/* Position selector */}
+            <div>
+              <label className="text-xs text-gray-400 block mb-2">表示位置</label>
+              <div className="grid grid-cols-2 gap-2 w-40 mx-auto">
+                {([
+                  { value: "top-left", label: "左上" },
+                  { value: "top-right", label: "右上" },
+                  { value: "bottom-left", label: "左下" },
+                  { value: "bottom-right", label: "右下" },
+                ] as const).map((pos) => (
+                  <button
+                    key={pos.value}
+                    onClick={() => setPipSettings((p) => ({ ...p, position: pos.value }))}
+                    className={`py-2 rounded-xl text-xs font-medium transition-all ${
+                      pipSettings.position === pos.value
+                        ? "bg-indigo-600 text-white"
+                        : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                    }`}
+                  >
+                    {pos.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Size slider */}
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">サイズ ({pipSettings.size}%)</label>
+              <input
+                type="range" min={15} max={50}
+                value={pipSettings.size}
+                onChange={(e) => setPipSettings((p) => ({ ...p, size: parseInt(e.target.value) }))}
+                className="w-full"
+              />
+            </div>
+
+            {/* Border */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">ボーダー幅 ({pipSettings.borderWidth}px)</label>
+                <input
+                  type="range" min={0} max={10}
+                  value={pipSettings.borderWidth}
+                  onChange={(e) => setPipSettings((p) => ({ ...p, borderWidth: parseInt(e.target.value) }))}
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">ボーダー色</label>
+                <input
+                  type="color"
+                  value={pipSettings.borderColor}
+                  onChange={(e) => setPipSettings((p) => ({ ...p, borderColor: e.target.value }))}
+                  className="w-full h-8 rounded border border-gray-700 cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* Start/end time */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">開始時間（秒）</label>
+                <input
+                  type="number" step={0.1} min={0}
+                  value={pipSettings.startTime}
+                  onChange={(e) => setPipSettings((p) => ({ ...p, startTime: parseFloat(e.target.value) || 0 }))}
+                  className="w-full px-2 py-1.5 bg-gray-900 border border-gray-700 rounded text-xs text-white"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">終了時間（秒）</label>
+                <input
+                  type="number" step={0.1} min={0}
+                  placeholder={`${duration.toFixed(1)}`}
+                  value={pipSettings.endTime || ""}
+                  onChange={(e) => setPipSettings((p) => ({ ...p, endTime: parseFloat(e.target.value) || 0 }))}
+                  className="w-full px-2 py-1.5 bg-gray-900 border border-gray-700 rounded text-xs text-white"
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-gray-600">終了時間が0の場合は動画の最後まで表示されます</p>
+
+            <button
+              onClick={handleApplyPip}
+              disabled={processing || !videoFile || !pipSettings.file}
+              className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+            >
+              {processing ? "適用中..." : "ワイプを適用"}
+            </button>
+          </div>
+        )}
+
         {/* Export Tool */}
         {activeTool === "export" && (
           <div className="space-y-4">
@@ -2259,6 +2810,63 @@ export default function VideoEditor() {
             >
               オリジナルサイズでダウンロード
             </button>
+
+            {/* GIF Export Section */}
+            <div className="pt-2 border-t border-gray-800">
+              <h4 className="text-sm font-bold text-gray-200 mb-1">GIF書き出し</h4>
+              <p className="text-xs text-gray-500 mb-3">動画の一部をGIFアニメーションとして書き出します</p>
+
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">開始時間（秒）</label>
+                    <input
+                      type="number" step={0.1} min={0}
+                      value={gifStart}
+                      onChange={(e) => setGifStart(parseFloat(e.target.value) || 0)}
+                      className="w-full px-2 py-1.5 bg-gray-900 border border-gray-700 rounded text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">終了時間（秒）</label>
+                    <input
+                      type="number" step={0.1} min={0}
+                      value={gifEnd}
+                      onChange={(e) => setGifEnd(parseFloat(e.target.value) || 10)}
+                      className="w-full px-2 py-1.5 bg-gray-900 border border-gray-700 rounded text-xs text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">FPS ({gifFps})</label>
+                  <input
+                    type="range" min={5} max={30}
+                    value={gifFps}
+                    onChange={(e) => setGifFps(parseInt(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">横幅 ({gifWidth}px)</label>
+                  <input
+                    type="range" min={240} max={720} step={10}
+                    value={gifWidth}
+                    onChange={(e) => setGifWidth(parseInt(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+
+                <button
+                  onClick={handleExportGif}
+                  disabled={processing}
+                  className="w-full py-3 bg-green-700 text-white rounded-xl text-sm font-bold hover:bg-green-600 disabled:opacity-50 transition-colors"
+                >
+                  {processing ? "GIF作成中..." : "GIFで書き出す"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
