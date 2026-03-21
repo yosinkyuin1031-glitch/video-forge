@@ -61,7 +61,19 @@ export const ASPECT_PRESETS: AspectRatioPreset[] = [
   { label: "Instagram広告", platform: "Instagram", ratio: "4:5", width: 1080, height: 1350 },
 ];
 
-export type EditorTool = "select" | "text" | "trim" | "silence" | "bgm" | "subtitle" | "export" | "speed" | "split" | "filter" | "transition" | "sticker" | "collage" | "slideshow" | "pip" | "mosaic" | "chromakey";
+export type EditorTool = "select" | "text" | "trim" | "silence" | "bgm" | "subtitle" | "export" | "speed" | "split" | "filter" | "transition" | "sticker" | "collage" | "slideshow" | "pip" | "mosaic" | "chromakey" | "template";
+
+export interface VideoTemplate {
+  id: string;
+  name: string;
+  platform: "youtube" | "reels";
+  category: string;
+  description: string;
+  // What this template creates
+  textOverlays: Partial<TextOverlay>[];
+  stickers: Partial<StickerOverlay>[];
+  aspectRatio?: number; // index into ASPECT_PRESETS
+}
 
 export type CollageLayout = "2h" | "2v" | "3h" | "4grid" | "6grid" | "9grid";
 

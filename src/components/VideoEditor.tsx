@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { TextOverlay, SubtitleEntry, EditorTool, ASPECT_PRESETS, FONT_OPTIONS, ClipMarker, FilterSettings, TransitionSetting, TransitionType, StickerOverlay, CollageLayout, CollageItem, CollageSettings, SlideshowImage, SlideshowSettings, PipSettings, MosaicArea, ChromaKeySettings, TextAnimation } from "@/lib/types";
+import { TextOverlay, SubtitleEntry, EditorTool, ASPECT_PRESETS, FONT_OPTIONS, ClipMarker, FilterSettings, TransitionSetting, TransitionType, StickerOverlay, CollageLayout, CollageItem, CollageSettings, SlideshowImage, SlideshowSettings, PipSettings, MosaicArea, ChromaKeySettings, TextAnimation, VideoTemplate } from "@/lib/types";
 import { detectSilence, removeSilence, trimVideo, addBgm, exportWithAspectRatio, SilentSegment, changeSpeed, splitAndReorder, applyFilters, applyTransitions, createCollage, createSlideshow, applyPip, exportGif, applyMosaicAreas, applyChromaKey } from "@/lib/ffmpeg-utils";
 
 // ===== BGM LIBRARY =====
@@ -30,6 +30,260 @@ const BGM_CATEGORIES = [
       { name: "ベル", desc: "チーン", bpm: 0, freq: 880, type: "sine" as OscillatorType },
     ]
   }
+];
+
+// ===== VIDEO TEMPLATES =====
+const VIDEO_TEMPLATES: VideoTemplate[] = [
+  // ===== YOUTUBE TEMPLATES =====
+  {
+    id: "yt-op",
+    name: "YouTube OP（オープニング）",
+    platform: "youtube",
+    category: "YouTube",
+    description: "大きなタイトルとサブタイトルで動画の掴みを演出",
+    aspectRatio: 0,
+    textOverlays: [
+      { text: "チャンネル名", fontSize: 48, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 0, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 45, fontFamily: "sans-serif", animation: "zoom-in" },
+      { text: "エピソード名をここに", fontSize: 24, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.5)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 60, fontFamily: "sans-serif", animation: "fade-in" },
+    ],
+    stickers: [
+      { emoji: "▶️", x: 85, y: 85, size: 60, rotation: 0, opacity: 1, animation: "pulse" },
+    ],
+  },
+  {
+    id: "yt-ed",
+    name: "YouTube ED（エンディング）",
+    platform: "youtube",
+    category: "YouTube",
+    description: "感謝メッセージ＋チャンネル登録・高評価の促進",
+    aspectRatio: 0,
+    textOverlays: [
+      { text: "ご視聴ありがとうございました!", fontSize: 36, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 3, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 30, fontFamily: "sans-serif", animation: "fade-in" },
+      { text: "チャンネル登録お願いします!", fontSize: 28, bold: true, color: "#ff0000", bgColor: "#ffffff", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 50, fontFamily: "sans-serif", animation: "bounce-in" },
+      { text: "高評価もお忘れなく👍", fontSize: 22, bold: false, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 65, fontFamily: "sans-serif", animation: "slide-up" },
+    ],
+    stickers: [
+      { emoji: "🔔", x: 85, y: 10, size: 80, rotation: 0, opacity: 1, animation: "bounce" },
+      { emoji: "👍", x: 15, y: 85, size: 60, rotation: 0, opacity: 1, animation: "bounce" },
+    ],
+  },
+  {
+    id: "yt-subscribe",
+    name: "チャンネル登録促進",
+    platform: "youtube",
+    category: "YouTube",
+    description: "画面端に登録を促すバナーを表示",
+    aspectRatio: 0,
+    textOverlays: [
+      { text: "チャンネル登録", fontSize: 32, bold: true, color: "#ffffff", bgColor: "#ff0000", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 80, y: 85, fontFamily: "sans-serif", animation: "bounce-in" },
+      { text: "🔔通知をONに!", fontSize: 20, bold: false, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 80, y: 92, fontFamily: "sans-serif", animation: "fade-in" },
+    ],
+    stickers: [
+      { emoji: "👆", x: 80, y: 78, size: 50, rotation: 0, opacity: 1, animation: "bounce" },
+    ],
+  },
+  {
+    id: "yt-commentary",
+    name: "YouTube解説風",
+    platform: "youtube",
+    category: "YouTube",
+    description: "ポイント番号＋説明テキストの解説スタイル",
+    aspectRatio: 0,
+    textOverlays: [
+      { text: "ポイント①", fontSize: 36, bold: true, color: "#ffff00", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 3, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 15, y: 15, fontFamily: "sans-serif", animation: "slide-right" },
+      { text: "ここに説明テキスト", fontSize: 24, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.8)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 85, fontFamily: "sans-serif", animation: "fade-in" },
+    ],
+    stickers: [
+      { emoji: "💡", x: 5, y: 10, size: 50, rotation: 0, opacity: 1, animation: "pulse" },
+    ],
+  },
+  {
+    id: "yt-impact",
+    name: "YouTubeサムネ風テロップ",
+    platform: "youtube",
+    category: "YouTube",
+    description: "衝撃的な大型テロップで視聴者の目を引く",
+    aspectRatio: 0,
+    textOverlays: [
+      { text: "衝撃の結果...", fontSize: 52, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#ff0000", outlineWidth: 5, shadowColor: "#ff0000", shadowBlur: 10, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 50, fontFamily: "'Arial Black', 'Impact', sans-serif", animation: "shake" },
+      { text: "※マジです", fontSize: 28, bold: true, color: "#ffff00", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 3, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 75, y: 75, fontFamily: "sans-serif", animation: "bounce-in" },
+    ],
+    stickers: [],
+  },
+  {
+    id: "yt-ranking",
+    name: "比較・ランキング",
+    platform: "youtube",
+    category: "YouTube",
+    description: "ランキング形式のテロップ構成",
+    aspectRatio: 0,
+    textOverlays: [
+      { text: "第1位", fontSize: 48, bold: true, color: "#ffd700", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 4, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 15, fontFamily: "sans-serif", animation: "scale-up" },
+      { text: "タイトルをここに", fontSize: 28, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 50, fontFamily: "sans-serif", animation: "fade-in" },
+    ],
+    stickers: [
+      { emoji: "🏆", x: 35, y: 10, size: 60, rotation: 0, opacity: 1, animation: "bounce" },
+      { emoji: "⭐", x: 65, y: 10, size: 40, rotation: 0, opacity: 1, animation: "pulse" },
+    ],
+  },
+  {
+    id: "yt-vlog",
+    name: "Vlog風",
+    platform: "youtube",
+    category: "YouTube",
+    description: "旅・日常vlog向けのシンプルなテロップ",
+    aspectRatio: 0,
+    textOverlays: [
+      { text: "Day 1", fontSize: 42, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 0, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 8, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 10, y: 15, fontFamily: "'Georgia', 'Times New Roman', serif", animation: "typewriter" },
+      { text: "場所名をここに", fontSize: 22, bold: false, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 10, y: 90, fontFamily: "sans-serif", animation: "fade-in" },
+    ],
+    stickers: [
+      { emoji: "📍", x: 5, y: 87, size: 30, rotation: 0, opacity: 1, animation: "float" },
+    ],
+  },
+  {
+    id: "yt-gaming",
+    name: "ゲーム実況",
+    platform: "youtube",
+    category: "YouTube",
+    description: "ゲーム実況向けのド派手な演出",
+    aspectRatio: 0,
+    textOverlays: [
+      { text: "GAME START!", fontSize: 44, bold: true, color: "#00ff00", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 4, shadowColor: "#00ff00", shadowBlur: 12, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 40, fontFamily: "'Arial Black', 'Impact', sans-serif", animation: "zoom-in" },
+      { text: "プレイヤー名", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.6)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 10, y: 8, fontFamily: "sans-serif", animation: "slide-right" },
+    ],
+    stickers: [
+      { emoji: "🎮", x: 3, y: 5, size: 40, rotation: 0, opacity: 1, animation: "none" },
+      { emoji: "🔴", x: 92, y: 5, size: 25, rotation: 0, opacity: 1, animation: "pulse" },
+    ],
+  },
+  // ===== REELS TEMPLATES =====
+  {
+    id: "reels-trend",
+    name: "Reelsトレンド風",
+    platform: "reels",
+    category: "Reels",
+    description: "インパクトあるキャッチコピーとハッシュタグ",
+    aspectRatio: 1,
+    textOverlays: [
+      { text: "キャッチコピーここ", fontSize: 38, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 3, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "bounce-in" },
+      { text: "#ハッシュタグ #リール", fontSize: 18, bold: false, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 92, fontFamily: "sans-serif", animation: "fade-in" },
+    ],
+    stickers: [
+      { emoji: "✨", x: 20, y: 35, size: 40, rotation: 0, opacity: 1, animation: "pulse" },
+      { emoji: "✨", x: 80, y: 35, size: 40, rotation: 0, opacity: 1, animation: "pulse" },
+    ],
+  },
+  {
+    id: "reels-product",
+    name: "Reels商品紹介",
+    platform: "reels",
+    category: "Reels",
+    description: "商品名・価格・プロフィールリンク誘導のセット",
+    aspectRatio: 1,
+    textOverlays: [
+      { text: "商品名", fontSize: 34, bold: true, color: "#ffffff", bgColor: "rgba(0,0,0,0.6)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "scale-up" },
+      { text: "¥0,000", fontSize: 28, bold: true, color: "#ffff00", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 45, fontFamily: "sans-serif", animation: "fade-in" },
+      { text: "詳しくはプロフィールのリンクから", fontSize: 16, bold: false, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 90, fontFamily: "sans-serif", animation: "slide-up" },
+    ],
+    stickers: [
+      { emoji: "🔥", x: 15, y: 30, size: 50, rotation: 0, opacity: 1, animation: "float" },
+      { emoji: "👇", x: 50, y: 95, size: 40, rotation: 0, opacity: 1, animation: "bounce" },
+    ],
+  },
+  {
+    id: "reels-beforeafter",
+    name: "Reelsビフォーアフター",
+    platform: "reels",
+    category: "Reels",
+    description: "ビフォー・アフターを対比させる構成",
+    aspectRatio: 1,
+    textOverlays: [
+      { text: "Before", fontSize: 36, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#ff0000", outlineWidth: 3, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 25, y: 15, fontFamily: "sans-serif", animation: "fade-in" },
+      { text: "After", fontSize: 36, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#00ff00", outlineWidth: 3, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 75, y: 15, fontFamily: "sans-serif", animation: "fade-in" },
+    ],
+    stickers: [
+      { emoji: "➡️", x: 50, y: 15, size: 40, rotation: 0, opacity: 1, animation: "pulse" },
+    ],
+  },
+  {
+    id: "reels-recipe",
+    name: "Reelsレシピ・料理",
+    platform: "reels",
+    category: "Reels",
+    description: "料理・レシピ動画向けのテロップ構成",
+    aspectRatio: 1,
+    textOverlays: [
+      { text: "レシピ名", fontSize: 32, bold: true, color: "#ffffff", bgColor: "rgba(0,0,0,0.5)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 10, fontFamily: "sans-serif", animation: "slide-down" },
+      { text: "材料: ここに記入", fontSize: 20, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.6)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 80, fontFamily: "sans-serif", animation: "fade-in" },
+    ],
+    stickers: [
+      { emoji: "🍳", x: 85, y: 8, size: 40, rotation: 0, opacity: 1, animation: "none" },
+    ],
+  },
+  {
+    id: "reels-motivation",
+    name: "Reelsモチベーション",
+    platform: "reels",
+    category: "Reels",
+    description: "名言・モチベーション動画向けのエレガントな構成",
+    aspectRatio: 1,
+    textOverlays: [
+      { text: "名言をここに", fontSize: 34, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 0, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 45, fontFamily: "'Georgia', 'Times New Roman', serif", animation: "typewriter" },
+      { text: "— 著者名", fontSize: 20, bold: false, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: true, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" },
+    ],
+    stickers: [
+      { emoji: "💫", x: 15, y: 40, size: 30, rotation: 0, opacity: 1, animation: "float" },
+    ],
+  },
+  {
+    id: "reels-exercise",
+    name: "Reelsダンス・エクササイズ",
+    platform: "reels",
+    category: "Reels",
+    description: "フィットネス・ダンス動画向けの元気なテロップ",
+    aspectRatio: 1,
+    textOverlays: [
+      { text: "エクササイズ名", fontSize: 30, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 3, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 8, fontFamily: "sans-serif", animation: "slide-down" },
+      { text: "30秒 × 3セット", fontSize: 22, bold: false, color: "#ffff00", bgColor: "rgba(0,0,0,0.6)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 88, fontFamily: "sans-serif", animation: "fade-in" },
+    ],
+    stickers: [
+      { emoji: "💪", x: 90, y: 5, size: 45, rotation: 0, opacity: 1, animation: "pulse" },
+      { emoji: "🔥", x: 10, y: 5, size: 45, rotation: 0, opacity: 1, animation: "float" },
+    ],
+  },
+  {
+    id: "reels-qa",
+    name: "Reels Q&A",
+    platform: "reels",
+    category: "Reels",
+    description: "質問と回答をわかりやすく表示するQ&A形式",
+    aspectRatio: 1,
+    textOverlays: [
+      { text: "Q. 質問をここに？", fontSize: 30, bold: true, color: "#ffffff", bgColor: "#6366f1", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 30, fontFamily: "sans-serif", animation: "slide-right" },
+      { text: "A. 回答をここに", fontSize: 26, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 55, fontFamily: "sans-serif", animation: "fade-in" },
+    ],
+    stickers: [
+      { emoji: "❓", x: 15, y: 25, size: 50, rotation: 0, opacity: 1, animation: "bounce" },
+    ],
+  },
+  {
+    id: "reels-sale",
+    name: "Reelsセール・告知",
+    platform: "reels",
+    category: "Reels",
+    description: "セール・キャンペーン告知向けの派手な構成",
+    aspectRatio: 1,
+    textOverlays: [
+      { text: "SALE", fontSize: 56, bold: true, color: "#ff0000", bgColor: "transparent", outlineColor: "#ffffff", outlineWidth: 4, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 30, fontFamily: "'Arial Black', 'Impact', sans-serif", animation: "shake" },
+      { text: "最大50%OFF", fontSize: 32, bold: true, color: "#ffff00", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 3, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 45, fontFamily: "sans-serif", animation: "bounce-in" },
+      { text: "期間限定 〇/〇まで", fontSize: 20, bold: false, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 60, fontFamily: "sans-serif", animation: "flicker" },
+    ],
+    stickers: [
+      { emoji: "🏷️", x: 15, y: 25, size: 50, rotation: 0, opacity: 1, animation: "float" },
+      { emoji: "🎉", x: 85, y: 25, size: 50, rotation: 0, opacity: 1, animation: "bounce" },
+    ],
+  },
 ];
 
 async function generateAudioBlob(freq: number, oscType: OscillatorType, isBgm: boolean): Promise<Blob> {
@@ -507,6 +761,65 @@ export default function VideoEditor() {
       setProgressMsg("クロマキー適用完了!");
     } catch { setProgressMsg("クロマキー適用に失敗しました"); }
     setProcessing(false);
+  };
+
+  // ===== TEMPLATE =====
+  const [activeTemplatePlatform, setActiveTemplatePlatform] = useState<"youtube" | "reels">("youtube");
+  const [templateSuccessMsg, setTemplateSuccessMsg] = useState<string | null>(null);
+
+  const handleApplyTemplate = (template: VideoTemplate) => {
+    const startT = currentTime;
+    const endT = Math.min(currentTime + 5, duration || currentTime + 5);
+
+    // Build full TextOverlay objects
+    const newTexts: TextOverlay[] = template.textOverlays.map((partial, i) => ({
+      id: `text-tmpl-${Date.now()}-${i}`,
+      text: partial.text ?? "テキスト",
+      x: partial.x ?? 50,
+      y: partial.y ?? 50,
+      fontSize: partial.fontSize ?? 32,
+      fontFamily: partial.fontFamily ?? "sans-serif",
+      color: partial.color ?? "#ffffff",
+      bgColor: partial.bgColor ?? "transparent",
+      startTime: startT,
+      endTime: endT,
+      bold: partial.bold ?? false,
+      italic: partial.italic ?? false,
+      outlineColor: partial.outlineColor ?? "#000000",
+      outlineWidth: partial.outlineWidth ?? 0,
+      shadowColor: partial.shadowColor ?? "transparent",
+      shadowBlur: partial.shadowBlur ?? 0,
+      shadowOffsetX: partial.shadowOffsetX ?? 0,
+      shadowOffsetY: partial.shadowOffsetY ?? 0,
+      animation: (partial.animation ?? "none") as TextAnimation,
+    }));
+
+    // Build full StickerOverlay objects
+    const newStickers: StickerOverlay[] = template.stickers.map((partial, i) => ({
+      id: `sticker-tmpl-${Date.now()}-${i}`,
+      emoji: partial.emoji ?? "✨",
+      x: partial.x ?? 50,
+      y: partial.y ?? 50,
+      size: partial.size ?? 60,
+      rotation: partial.rotation ?? 0,
+      startTime: startT,
+      endTime: endT,
+      opacity: partial.opacity ?? 1,
+      animation: (partial.animation ?? "none") as StickerOverlay["animation"],
+    }));
+
+    setTextOverlays((prev) => [...prev, ...newTexts]);
+    setStickers((prev) => [...prev, ...newStickers]);
+
+    if (template.aspectRatio !== undefined) {
+      setSelectedPresetIdx(template.aspectRatio);
+    }
+
+    // Show success, switch to text tool
+    setTemplateSuccessMsg(`テンプレート「${template.name}」を適用しました`);
+    setTimeout(() => setTemplateSuccessMsg(null), 3000);
+    setActiveTool("text");
+    if (newTexts.length > 0) setEditingTextId(newTexts[0].id);
   };
 
   // ===== AUTOSAVE =====
@@ -1202,6 +1515,7 @@ export default function VideoEditor() {
     filterSettings.saturation !== 100 || filterSettings.temperature !== 0 || filterSettings.vignette !== 0;
 
   const TOOLS: { key: EditorTool; label: string; icon: string }[] = [
+    { key: "template", label: "テンプレート", icon: "📋" },
     { key: "silence", label: "無音カット", icon: "✂️" },
     { key: "trim", label: "トリミング", icon: "🎬" },
     { key: "text", label: "テロップ", icon: "T" },
@@ -1343,6 +1657,65 @@ export default function VideoEditor() {
 
       {/* Tool Panel */}
       <div className="flex-1 overflow-y-auto p-4 bg-gray-950">
+        {/* Template */}
+        {activeTool === "template" && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-sm font-bold text-gray-200 mb-1">テンプレート</h3>
+              <p className="text-xs text-gray-500">ワンタップでテロップ・スタンプを自動配置。適用後にテキストを編集できます。</p>
+            </div>
+            {templateSuccessMsg && (
+              <div className="bg-green-900/70 border border-green-600 rounded-xl px-3 py-2 text-xs text-green-300 font-medium">
+                ✅ {templateSuccessMsg}
+              </div>
+            )}
+            {/* Platform Tabs */}
+            <div className="flex gap-1">
+              {(["youtube", "reels"] as const).map((platform) => (
+                <button
+                  key={platform}
+                  onClick={() => setActiveTemplatePlatform(platform)}
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${activeTemplatePlatform === platform ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                >
+                  {platform === "youtube" ? "🎬 YouTube" : "📱 Reels"}
+                </button>
+              ))}
+            </div>
+            {/* Template Cards */}
+            <div className="space-y-3">
+              {VIDEO_TEMPLATES.filter((t) => t.platform === activeTemplatePlatform).map((template) => (
+                <div key={template.id} className="bg-gray-800 border border-gray-700 rounded-xl p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-200">{template.name}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{template.description}</p>
+                    </div>
+                    <button
+                      onClick={() => handleApplyTemplate(template)}
+                      className="flex-shrink-0 px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-500 transition-colors"
+                    >
+                      適用
+                    </button>
+                  </div>
+                  {/* Preview of elements */}
+                  <div className="flex flex-wrap gap-1">
+                    {template.textOverlays.map((t, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-700 rounded text-[10px] text-gray-300">
+                        <span className="text-indigo-400">T</span> {(t.text ?? "テキスト").slice(0, 12)}{(t.text ?? "").length > 12 ? "…" : ""}
+                      </span>
+                    ))}
+                    {template.stickers.map((s, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-700 rounded text-[10px] text-gray-300">
+                        {s.emoji}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Silence */}
         {activeTool === "silence" && (
           <div className="space-y-4">
