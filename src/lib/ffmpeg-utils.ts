@@ -32,12 +32,21 @@ export async function getFFmpeg(): Promise<FFmpeg> {
 
   ffmpeg = new FFmpeg();
 
-  const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm";
+  // Use multi-thread core when SharedArrayBuffer is available (cross-origin isolated)
+  const useMT = typeof SharedArrayBuffer !== "undefined";
+  const baseURL = useMT
+    ? "https://unpkg.com/@ffmpeg/core-mt@0.12.10/dist/esm"
+    : "https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm";
+
   try {
-    await ffmpeg.load({
+    const loadConfig: Parameters<FFmpeg["load"]>[0] = {
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
       wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-    });
+    };
+    if (useMT) {
+      loadConfig.workerURL = await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, "text/javascript");
+    }
+    await ffmpeg.load(loadConfig);
   } catch (e) {
     ffmpeg = null;
     throw new Error(

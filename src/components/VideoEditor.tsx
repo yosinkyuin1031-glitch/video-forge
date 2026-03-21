@@ -1993,7 +1993,11 @@ export default function VideoEditor() {
     try {
       const { getFFmpeg } = await import("@/lib/ffmpeg-utils");
       await getFFmpeg(); setFfmpegLoaded(true);
-    } catch { setProgressMsg("FFmpegの読み込みに失敗しました。ブラウザを更新してください。"); } finally { setFfmpegLoading(false); }
+    } catch (e) {
+      setProgressMsg("FFmpegの読み込みに失敗しました。ページを再読み込みしてください。");
+      setFfmpegLoading(false);
+      throw e;
+    } finally { setFfmpegLoading(false); }
   }, [ffmpegLoaded]);
 
   const handleVideoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
