@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { TextOverlay, SubtitleEntry, EditorTool, ASPECT_PRESETS, FONT_OPTIONS, ClipMarker, FilterSettings, TransitionSetting, TransitionType, StickerOverlay, CollageLayout, CollageItem, CollageSettings, SlideshowImage, SlideshowSettings, PipSettings, MosaicArea, ChromaKeySettings, TextAnimation, VideoTemplate, Keyframe, KeyframeProperties } from "@/lib/types";
-import { detectSilence, removeSilence, trimVideo, addBgm, exportWithAspectRatio, SilentSegment, changeSpeed, splitAndReorder, applyFilters, applyTransitions, createCollage, createSlideshow, applyPip, exportGif, applyMosaicAreas, applyChromaKey, extractAudio } from "@/lib/ffmpeg-utils";
+import { TextOverlay, SubtitleEntry, EditorTool, ASPECT_PRESETS, FONT_OPTIONS, ClipMarker, FilterSettings, TransitionSetting, TransitionType, StickerOverlay, CollageLayout, CollageItem, CollageSettings, SlideshowImage, SlideshowSettings, PipSettings, MosaicArea, ChromaKeySettings, TextAnimation, VideoTemplate, Keyframe, KeyframeProperties, LogoSettings, LogoPosition } from "@/lib/types";
+import { detectSilence, removeSilence, trimVideo, addBgm, exportWithAspectRatio, SilentSegment, changeSpeed, splitAndReorder, applyFilters, applyTransitions, createCollage, createSlideshow, applyPip, exportGif, applyMosaicAreas, applyChromaKey, extractAudio, applyLogo } from "@/lib/ffmpeg-utils";
 
 // ===== BGM LIBRARY =====
 type BgmItemKey =
@@ -305,6 +305,64 @@ const VIDEO_TEMPLATES: VideoTemplate[] = [
       { emoji: "🎉", x: 85, y: 25, size: 50, rotation: 0, opacity: 1, animation: "bounce" },
     ],
   },
+  // ===== 治療家専用テンプレート =====
+  // --- 症状解説 ---
+  { id: "th-symptom-01", name: "腰痛改善ストレッチ", platform: "therapist", category: "症状解説", description: "腰痛改善ストレッチ3選の紹介テロップ", textOverlays: [{ text: "腰痛改善ストレッチ3選", fontSize: 40, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#1e40af", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "slide-right" }, { text: "自宅でできる簡単ケア", fontSize: 24, bold: false, color: "#ffffff", bgColor: "rgba(30,64,175,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "💪", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-symptom-02", name: "肩こり解消法", platform: "therapist", category: "症状解説", description: "肩こりがラクになる方法の紹介テロップ", textOverlays: [{ text: "肩こりがラクになる方法", fontSize: 38, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#0e7490", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "slide-right" }, { text: "〇〇整体院", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(14,116,144,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "🙆", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "float" }] },
+  { id: "th-symptom-03", name: "頭痛の原因と対策", platform: "therapist", category: "症状解説", description: "その頭痛、首が原因かも？の解説テロップ", textOverlays: [{ text: "その頭痛、首が原因かも？", fontSize: 36, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#6d28d9", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "slide-right" }, { text: "専門家が解説", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(109,40,217,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "🧠", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-symptom-04", name: "膝痛予防体操", platform: "therapist", category: "症状解説", description: "膝が痛い方向けの毎日3分体操テロップ", textOverlays: [{ text: "膝が痛い方必見", fontSize: 42, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#1e40af", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "slide-right" }, { text: "毎日3分でOK", fontSize: 24, bold: false, color: "#ffffff", bgColor: "rgba(30,64,175,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "🦵", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "bounce" }] },
+  { id: "th-symptom-05", name: "坐骨神経痛", platform: "therapist", category: "症状解説", description: "坐骨神経痛の正体と原因解説テロップ", textOverlays: [{ text: "坐骨神経痛の正体", fontSize: 40, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#b91c1c", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "slide-right" }, { text: "なぜ痛みが出るのか", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(185,28,28,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "⚡", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-symptom-06", name: "猫背改善", platform: "therapist", category: "症状解説", description: "猫背を治す姿勢リセットテロップ", textOverlays: [{ text: "猫背を治す姿勢リセット", fontSize: 36, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#0e7490", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "slide-right" }, { text: "デスクワークの方へ", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(14,116,144,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "🧘", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "float" }] },
+  { id: "th-symptom-07", name: "自律神経", platform: "therapist", category: "症状解説", description: "自律神経を整える3つの習慣テロップ", textOverlays: [{ text: "自律神経を整える3つの習慣", fontSize: 34, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#065f46", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "slide-right" }, { text: "不調の根本原因", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(6,95,70,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "🌿", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "float" }] },
+  { id: "th-symptom-08", name: "五十肩", platform: "therapist", category: "症状解説", description: "五十肩のセルフケアテロップ", textOverlays: [{ text: "五十肩のセルフケア", fontSize: 40, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#1e40af", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "slide-right" }, { text: "動かし方がポイント", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(30,64,175,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "💫", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-symptom-09", name: "ぎっくり腰", platform: "therapist", category: "症状解説", description: "ぎっくり腰のNG行動解説テロップ", textOverlays: [{ text: "ぎっくり腰になったら", fontSize: 38, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#b91c1c", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "slide-right" }, { text: "やってはいけないNG行動", fontSize: 22, bold: true, color: "#ffff00", bgColor: "rgba(185,28,28,0.8)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "bounce-in" }], stickers: [{ emoji: "⚠️", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-symptom-10", name: "不眠・睡眠", platform: "therapist", category: "症状解説", description: "眠れない夜のストレッチテロップ", textOverlays: [{ text: "眠れない夜にこのストレッチ", fontSize: 34, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#1e40af", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "fade-in" }, { text: "3分で深い眠りへ", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(30,64,175,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "😴", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "float" }] },
+  // --- 施術紹介 ---
+  { id: "th-treatment-01", name: "ビフォーアフター", platform: "therapist", category: "施術紹介", description: "施術前後の変化を対比表示", textOverlays: [{ text: "Before → After", fontSize: 44, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 8, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 35, fontFamily: "'Arial Black', 'Impact', sans-serif", animation: "scale-up" }, { text: "施術前後の変化", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 55, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "✨", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-treatment-02", name: "施術風景", platform: "therapist", category: "施術紹介", description: "施術の様子を紹介するテロップ", textOverlays: [{ text: "施術の様子", fontSize: 40, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#0e7490", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "fade-in" }, { text: "〇〇整体院", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(14,116,144,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "🏥", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "none" }] },
+  { id: "th-treatment-03", name: "施術メニュー紹介", platform: "therapist", category: "施術紹介", description: "当院のメニューとお悩み別施術の紹介", textOverlays: [{ text: "当院のメニュー", fontSize: 40, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#1e40af", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "slide-right" }, { text: "お悩みに合わせた施術", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(30,64,175,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "📋", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "none" }] },
+  { id: "th-treatment-04", name: "新メニュー告知", platform: "therapist", category: "施術紹介", description: "新メニュー開始の告知テロップ", textOverlays: [{ text: "NEW MENU", fontSize: 48, bold: true, color: "#ffffff", bgColor: "#dc2626", outlineColor: "#ffffff", outlineWidth: 2, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 35, fontFamily: "'Arial Black', 'Impact', sans-serif", animation: "bounce-in" }, { text: "〇月スタート！", fontSize: 26, bold: true, color: "#ffff00", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 3, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "shake" }], stickers: [{ emoji: "🆕", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "bounce" }] },
+  { id: "th-treatment-05", name: "初回体験", platform: "therapist", category: "施術紹介", description: "初回限定価格の告知テロップ", textOverlays: [{ text: "初回限定 〇〇円", fontSize: 40, bold: true, color: "#ffff00", bgColor: "#dc2626", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "bounce-in" }, { text: "まずはお試しください", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "🎁", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "bounce" }] },
+  { id: "th-treatment-06", name: "技術紹介", platform: "therapist", category: "施術紹介", description: "独自療法の説明テロップ", textOverlays: [{ text: "〇〇療法とは？", fontSize: 40, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#0e7490", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "slide-right" }, { text: "当院独自のアプローチ", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(14,116,144,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "🔬", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-treatment-07", name: "検査・カウンセリング", platform: "therapist", category: "施術紹介", description: "まず検査から始める大切さのテロップ", textOverlays: [{ text: "まず検査から", fontSize: 44, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#1e40af", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "slide-right" }, { text: "原因を見つけることが大切", fontSize: 20, bold: false, color: "#ffffff", bgColor: "rgba(30,64,175,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "🔍", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-treatment-08", name: "通院の流れ", platform: "therapist", category: "施術紹介", description: "初めての方向け通院フロー説明テロップ", textOverlays: [{ text: "初めての方へ", fontSize: 40, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#0e7490", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "slide-right" }, { text: "ご予約〜施術の流れ", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(14,116,144,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "📝", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "none" }] },
+  // --- 患者の声 ---
+  { id: "th-voice-01", name: "患者の声（基本）", platform: "therapist", category: "患者の声", description: "患者様の声の基本テロップ", textOverlays: [{ text: "患者様の声", fontSize: 42, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#1e40af", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "typewriter" }, { text: "〇〇でお悩みだったA様", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(30,64,175,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "💬", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-voice-02", name: "喜びの声", platform: "therapist", category: "患者の声", description: "嬉しいお言葉・改善事例テロップ", textOverlays: [{ text: "嬉しいお言葉いただきました", fontSize: 32, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#065f46", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "typewriter" }, { text: "改善事例", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(6,95,70,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "😊", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "bounce" }] },
+  { id: "th-voice-03", name: "口コミ紹介", platform: "therapist", category: "患者の声", description: "Google口コミ5つ星の紹介テロップ", textOverlays: [{ text: "Google口コミ ★★★★★", fontSize: 32, bold: true, color: "#ffd700", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 3, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "scale-up" }, { text: "ありがとうございます", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "⭐", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-voice-04", name: "改善事例", platform: "therapist", category: "患者の声", description: "施術回数での改善事例テロップ", textOverlays: [{ text: "改善事例 #〇〇", fontSize: 40, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#1e40af", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "typewriter" }, { text: "〇回の施術で改善", fontSize: 24, bold: true, color: "#ffff00", bgColor: "rgba(30,64,175,0.8)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "bounce-in" }], stickers: [{ emoji: "📈", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "float" }] },
+  { id: "th-voice-05", name: "インタビュー風", platform: "therapist", category: "患者の声", description: "Q&A形式のインタビュー風テロップ", textOverlays: [{ text: "Q. どんな症状でしたか？", fontSize: 30, bold: true, color: "#ffffff", bgColor: "#1e40af", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 30, fontFamily: "sans-serif", animation: "slide-right" }, { text: "A. 〇〇が辛くて...", fontSize: 26, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 55, fontFamily: "sans-serif", animation: "typewriter" }], stickers: [{ emoji: "🎤", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-voice-06", name: "数字で見る実績", platform: "therapist", category: "患者の声", description: "施術実績と開院年数の信頼テロップ", textOverlays: [{ text: "施術実績 〇〇〇〇人", fontSize: 36, bold: true, color: "#ffd700", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "scale-up" }, { text: "開院〇年の信頼", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "🏆", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "bounce" }] },
+  // --- 院紹介・ブランディング ---
+  { id: "th-brand-01", name: "院紹介", platform: "therapist", category: "院紹介", description: "整体院の基本紹介テロップ", textOverlays: [{ text: "〇〇整体院", fontSize: 44, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#4338ca", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 8, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "fade-in" }, { text: "あなたの健康をサポート", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(67,56,202,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "🏠", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "none" }] },
+  { id: "th-brand-02", name: "スタッフ紹介", platform: "therapist", category: "院紹介", description: "院長プロフィール・資格・経歴テロップ", textOverlays: [{ text: "院長プロフィール", fontSize: 40, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#4338ca", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "fade-in" }, { text: "資格・経歴", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(67,56,202,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "👨‍⚕️", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "none" }] },
+  { id: "th-brand-03", name: "アクセス", platform: "therapist", category: "院紹介", description: "アクセス・駐車場情報テロップ", textOverlays: [{ text: "アクセス・駐車場", fontSize: 38, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#0e7490", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "slide-right" }, { text: "〇〇駅 徒歩〇分", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(14,116,144,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "📍", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "bounce" }] },
+  { id: "th-brand-04", name: "院内ツアー", platform: "therapist", category: "院紹介", description: "清潔で落ち着いた院内紹介テロップ", textOverlays: [{ text: "院内をご紹介", fontSize: 40, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#4338ca", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "fade-in" }, { text: "清潔で落ち着いた空間", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(67,56,202,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "🏥", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "none" }] },
+  { id: "th-brand-05", name: "理念・想い", platform: "therapist", category: "院紹介", description: "痛みのない生活への想いテロップ", textOverlays: [{ text: "当院の想い", fontSize: 42, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#be185d", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "fade-in" }, { text: "痛みのない生活を", fontSize: 24, bold: false, color: "#ffffff", bgColor: "rgba(190,24,93,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "typewriter" }], stickers: [{ emoji: "❤️", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-brand-06", name: "休診日のお知らせ", platform: "therapist", category: "院紹介", description: "休診日告知テロップ", textOverlays: [{ text: "お知らせ", fontSize: 42, bold: true, color: "#ffffff", bgColor: "#dc2626", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "bounce-in" }, { text: "〇月〇日は休診です", fontSize: 26, bold: true, color: "#ffffff", bgColor: "rgba(0,0,0,0.8)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "📅", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "none" }] },
+  { id: "th-brand-07", name: "年末年始", platform: "therapist", category: "院紹介", description: "年末年始の営業案内テロップ", textOverlays: [{ text: "年末年始の営業案内", fontSize: 34, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#4338ca", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "fade-in" }, { text: "〇/〇〜〇/〇", fontSize: 32, bold: true, color: "#ffd700", bgColor: "rgba(67,56,202,0.8)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "scale-up" }], stickers: [{ emoji: "🎍", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "none" }] },
+  { id: "th-brand-08", name: "開院記念", platform: "therapist", category: "院紹介", description: "周年記念と感謝キャンペーンテロップ", textOverlays: [{ text: "おかげさまで〇周年", fontSize: 36, bold: true, color: "#ffd700", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "scale-up" }, { text: "感謝キャンペーン実施中", fontSize: 22, bold: true, color: "#ffffff", bgColor: "rgba(220,38,38,0.8)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "bounce-in" }], stickers: [{ emoji: "🎊", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "bounce" }] },
+  // --- 集客・キャンペーン ---
+  { id: "th-campaign-01", name: "キャンペーン", platform: "therapist", category: "集客", description: "期間限定キャンペーン告知テロップ", textOverlays: [{ text: "期間限定キャンペーン", fontSize: 36, bold: true, color: "#ffff00", bgColor: "#dc2626", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "shake" }, { text: "〇月〇日まで", fontSize: 26, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 3, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "flicker" }], stickers: [{ emoji: "🏷️", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "bounce" }] },
+  { id: "th-campaign-02", name: "紹介割引", platform: "therapist", category: "集客", description: "友達紹介キャンペーンテロップ", textOverlays: [{ text: "お友達紹介キャンペーン", fontSize: 34, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#dc2626", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "bounce-in" }, { text: "ご紹介で〇〇円OFF", fontSize: 28, bold: true, color: "#ffff00", bgColor: "rgba(220,38,38,0.8)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "shake" }], stickers: [{ emoji: "🤝", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "bounce" }] },
+  { id: "th-campaign-03", name: "LINE登録", platform: "therapist", category: "集客", description: "LINE登録特典の告知テロップ", textOverlays: [{ text: "LINE登録で特典GET", fontSize: 36, bold: true, color: "#ffffff", bgColor: "#16a34a", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "bounce-in" }, { text: "@〇〇〇で検索", fontSize: 24, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "📱", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "bounce" }] },
+  { id: "th-campaign-04", name: "予約促進", platform: "therapist", category: "集客", description: "早めのご予約を促すテロップ", textOverlays: [{ text: "ご予約はお早めに", fontSize: 38, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#dc2626", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 40, fontFamily: "sans-serif", animation: "shake" }, { text: "空き状況はLINEで確認", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "📞", x: 85, y: 35, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-campaign-05", name: "回数券", platform: "therapist", category: "集客", description: "お得な回数券の告知テロップ", textOverlays: [{ text: "お得な回数券", fontSize: 40, bold: true, color: "#ffd700", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "scale-up" }, { text: "〇回分で〇〇円", fontSize: 28, bold: true, color: "#ffffff", bgColor: "rgba(220,38,38,0.8)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "bounce-in" }], stickers: [{ emoji: "💰", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "bounce" }] },
+  { id: "th-campaign-06", name: "季節キャンペーン", platform: "therapist", category: "集客", description: "春の不調に向けた季節キャンペーンテロップ", textOverlays: [{ text: "春の不調に", fontSize: 42, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#be185d", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "bounce-in" }, { text: "今だけ特別価格", fontSize: 28, bold: true, color: "#ffff00", bgColor: "rgba(220,38,38,0.8)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "shake" }], stickers: [{ emoji: "🌸", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "float" }] },
+  { id: "th-campaign-07", name: "新規限定", platform: "therapist", category: "集客", description: "初めての方限定割引テロップ", textOverlays: [{ text: "初めての方限定", fontSize: 38, bold: true, color: "#ffffff", bgColor: "#dc2626", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "bounce-in" }, { text: "〇〇%OFF", fontSize: 44, bold: true, color: "#ffff00", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 4, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 60, fontFamily: "'Arial Black', 'Impact', sans-serif", animation: "shake" }], stickers: [{ emoji: "✅", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "bounce" }] },
+  { id: "th-campaign-08", name: "SNSフォロー促進", platform: "therapist", category: "集客", description: "SNSフォローを促す健康情報配信テロップ", textOverlays: [{ text: "フォローお願いします！", fontSize: 34, bold: true, color: "#ffffff", bgColor: "#1d4ed8", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "bounce-in" }, { text: "健康情報を毎日配信", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "👍", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "bounce" }] },
+  // --- 健康情報・教育 ---
+  { id: "th-health-01", name: "豆知識", platform: "therapist", category: "健康情報", description: "意外な健康豆知識テロップ", textOverlays: [{ text: "知ってましたか？", fontSize: 40, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#0e7490", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "bounce-in" }, { text: "〇〇の意外な事実", fontSize: 24, bold: false, color: "#ffffff", bgColor: "rgba(14,116,144,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "💡", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-health-02", name: "やってはいけない", platform: "therapist", category: "健康情報", description: "知らないと悪化するNG行動テロップ", textOverlays: [{ text: "やってはいけない〇〇", fontSize: 36, bold: true, color: "#ffffff", bgColor: "#dc2626", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "shake" }, { text: "知らないと悪化します", fontSize: 22, bold: true, color: "#ffff00", bgColor: "rgba(0,0,0,0.8)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "bounce-in" }], stickers: [{ emoji: "🚫", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-health-03", name: "正しいvs間違い", platform: "therapist", category: "健康情報", description: "正しい方法と間違いを比較するテロップ", textOverlays: [{ text: "正しい〇〇 vs 間違った〇〇", fontSize: 30, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#0e7490", outlineWidth: 3, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "slide-right" }, { text: "あなたはどっち？", fontSize: 26, bold: true, color: "#ffff00", bgColor: "rgba(14,116,144,0.8)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "bounce-in" }], stickers: [{ emoji: "⭕", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-health-04", name: "ランキング", platform: "therapist", category: "健康情報", description: "治療家が教えるランキングテロップ", textOverlays: [{ text: "〇〇ランキング TOP3", fontSize: 34, bold: true, color: "#ffd700", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "scale-up" }, { text: "治療家が教える", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "🥇", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "bounce" }] },
+  { id: "th-health-05", name: "食事・栄養", platform: "therapist", category: "健康情報", description: "内側からケアする食べ物テロップ", textOverlays: [{ text: "〇〇に良い食べ物", fontSize: 38, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#065f46", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "slide-right" }, { text: "内側からケア", fontSize: 24, bold: false, color: "#ffffff", bgColor: "rgba(6,95,70,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "🥗", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "float" }] },
+  { id: "th-health-06", name: "季節の健康法", platform: "therapist", category: "健康情報", description: "季節ごとの体調管理テロップ", textOverlays: [{ text: "〇月の体調管理", fontSize: 38, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#0e7490", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 35, fontFamily: "sans-serif", animation: "slide-right" }, { text: "この時期に注意すること", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(14,116,144,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 58, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "📆", x: 85, y: 30, size: 60, rotation: 0, opacity: 1, animation: "none" }] },
+  // --- SNSリール専用 ---
+  { id: "th-reel-01", name: "リール症状チェック", platform: "therapist", category: "リール", description: "縦型リール用の症状チェックテロップ", aspectRatio: 1, textOverlays: [{ text: "こんな症状ありませんか？", fontSize: 36, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#1e40af", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 30, fontFamily: "sans-serif", animation: "slide-right" }, { text: "チェックしてみて！", fontSize: 24, bold: true, color: "#ffff00", bgColor: "rgba(30,64,175,0.8)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 50, fontFamily: "sans-serif", animation: "bounce-in" }], stickers: [{ emoji: "☑️", x: 85, y: 28, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-reel-02", name: "リールビフォーアフター", platform: "therapist", category: "リール", description: "縦型リール用の施術ビフォーアフター", aspectRatio: 1, textOverlays: [{ text: "施術〇分で変化", fontSize: 38, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 30, fontFamily: "'Arial Black', 'Impact', sans-serif", animation: "scale-up" }, { text: "※個人の感想です", fontSize: 16, bold: false, color: "#cccccc", bgColor: "rgba(0,0,0,0.6)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 90, fontFamily: "sans-serif", animation: "fade-in" }], stickers: [{ emoji: "🔄", x: 85, y: 28, size: 60, rotation: 0, opacity: 1, animation: "spin" }] },
+  { id: "th-reel-03", name: "リール1分ストレッチ", platform: "therapist", category: "リール", description: "縦型リール用の1分ストレッチ保存促進", aspectRatio: 1, textOverlays: [{ text: "1分でできるストレッチ", fontSize: 34, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#065f46", outlineWidth: 4, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 6, shadowOffsetX: 2, shadowOffsetY: 2, italic: false, x: 50, y: 25, fontFamily: "sans-serif", animation: "slide-right" }, { text: "保存して毎日やろう", fontSize: 22, bold: true, color: "#ffff00", bgColor: "rgba(6,95,70,0.8)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 88, fontFamily: "sans-serif", animation: "bounce-in" }], stickers: [{ emoji: "⏱️", x: 85, y: 22, size: 60, rotation: 0, opacity: 1, animation: "pulse" }] },
+  { id: "th-reel-04", name: "リールQ&A", platform: "therapist", category: "リール", description: "縦型リール用のQ&A回答テロップ", aspectRatio: 1, textOverlays: [{ text: "よくある質問", fontSize: 36, bold: true, color: "#ffffff", bgColor: "#1e40af", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 20, fontFamily: "sans-serif", animation: "slide-right" }, { text: "〇〇について", fontSize: 26, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", outlineColor: "#000000", outlineWidth: 0, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, italic: false, x: 50, y: 45, fontFamily: "sans-serif", animation: "typewriter" }], stickers: [{ emoji: "❓", x: 85, y: 18, size: 60, rotation: 0, opacity: 1, animation: "bounce" }] },
 ];
 
 async function generateAudioBlob(key: BgmItemKey): Promise<Blob> {
@@ -899,6 +957,27 @@ export default function VideoEditor() {
     try { return !!localStorage.getItem("videoforge_whisper_key"); } catch { return false; }
   });
 
+  // ===== AI SCRIPT =====
+  const [scriptTopic, setScriptTopic] = useState("");
+  const [scriptDuration, setScriptDuration] = useState<"short" | "medium" | "long">("medium");
+  const [scriptPlatform, setScriptPlatform] = useState<"youtube" | "reels">("youtube");
+  const [generatedScript, setGeneratedScript] = useState<{ text: string; duration: number }[]>([]);
+  const [scriptGenerating, setScriptGenerating] = useState(false);
+
+  // ===== THUMBNAIL =====
+  const [thumbnailFrames, setThumbnailFrames] = useState<string[]>([]);
+  const [selectedThumbnailFrame, setSelectedThumbnailFrame] = useState(0);
+  const [thumbnailText, setThumbnailText] = useState("");
+  const [thumbnailTemplate, setThumbnailTemplate] = useState(0);
+  const [thumbnailGenerating, setThumbnailGenerating] = useState(false);
+
+  // ===== SNS CAPTION =====
+  const [captionPlatform, setCaptionPlatform] = useState<"Instagram" | "YouTube" | "TikTok">("YouTube");
+  const [captionTopic, setCaptionTopic] = useState("");
+  const [generatedCaption, setGeneratedCaption] = useState("");
+  const [generatedHashtags, setGeneratedHashtags] = useState<string[]>([]);
+  const [captionGenerating, setCaptionGenerating] = useState(false);
+
   // BGM
   const [bgmFile, setBgmFile] = useState<File | null>(null);
   const [bgmVolume, setBgmVolume] = useState(0.3);
@@ -1282,8 +1361,39 @@ export default function VideoEditor() {
     setProcessing(false);
   };
 
+  // ===== LOGO =====
+  const [logoSettings, setLogoSettings] = useState<LogoSettings>({ file: null, url: "", position: "bottom-right", size: 15, opacity: 70, margin: 20 });
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
+  const logoImgRef = useRef<HTMLImageElement | null>(null);
+
+  const handleLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setLogoSettings((prev) => ({ ...prev, file, url }));
+    const img = new Image();
+    img.src = url;
+    logoImgRef.current = img;
+  };
+
+  const handleApplyLogoExport = async () => {
+    if (!videoFile || !logoSettings.file) { setProgressMsg("動画とロゴ画像が必要です"); return; }
+    await ensureFFmpeg(); setProcessing(true);
+    try {
+      const blob = await applyLogo({ videoFile, logoFile: logoSettings.file, position: logoSettings.position, size: logoSettings.size, opacity: logoSettings.opacity, margin: logoSettings.margin }, setProgressMsg);
+      const newFile = new File([blob], "logo.mp4", { type: "video/mp4" });
+      const newUrl = URL.createObjectURL(blob);
+      setVideoFile(newFile); setVideoUrl(newUrl);
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      setProgressMsg("ロゴ合成完了!");
+    } catch { setProgressMsg("ロゴ合成に失敗しました"); }
+    setProcessing(false);
+  };
+
   // ===== TEMPLATE =====
-  const [activeTemplatePlatform, setActiveTemplatePlatform] = useState<"youtube" | "reels">("youtube");
+  const [activeTemplatePlatform, setActiveTemplatePlatform] = useState<"youtube" | "reels" | "therapist">("youtube");
+  const [activeTherapistCategory, setActiveTherapistCategory] = useState("症状解説");
+  const THERAPIST_CATEGORIES = ["症状解説", "施術紹介", "患者の声", "院紹介", "集客", "健康情報", "リール"];
   const [templateSuccessMsg, setTemplateSuccessMsg] = useState<string | null>(null);
 
   const handleApplyTemplate = (template: VideoTemplate) => {
@@ -1341,6 +1451,306 @@ export default function VideoEditor() {
     setTimeout(() => setTemplateSuccessMsg(null), 3000);
     setActiveTool("text");
     if (newTexts.length > 0) setEditingTextId(newTexts[0].id);
+  };
+
+  // ===== AI SCRIPT GENERATION =====
+  const handleGenerateScript = async () => {
+    const apiKey = whisperApiKey;
+    if (!apiKey || !scriptTopic) return;
+    setScriptGenerating(true);
+    try {
+      const durationMap = { short: "1分（約200文字）", medium: "3分（約600文字）", long: "5分（約1000文字）" };
+      const platformStyle = scriptPlatform === "reels"
+        ? "Instagram Reelsの縦型動画用。テンポよく、キャッチーに。最初の3秒でフックを。"
+        : "YouTube動画用。丁寧に解説。導入→本題→まとめの構成で。";
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [{
+            role: "system",
+            content: `あなたは治療院・整体院のYouTube/SNS動画の台本ライターです。患者さんにわかりやすく、専門的すぎない言葉で健康情報を伝える台本を作成してください。${platformStyle}台本は必ずJSON配列形式で返してください。各要素は {"text": "セリフ", "duration": 秒数} です。合計が${durationMap[scriptDuration]}になるようにしてください。`
+          }, {
+            role: "user",
+            content: `テーマ: ${scriptTopic}\n台本をJSON配列で生成してください。`
+          }],
+          temperature: 0.7,
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || "";
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const segments = JSON.parse(jsonMatch[0]);
+        setGeneratedScript(segments);
+      } else {
+        setProgressMsg("台本の解析に失敗しました");
+      }
+    } catch {
+      setProgressMsg("台本生成に失敗しました");
+    }
+    setScriptGenerating(false);
+  };
+
+  const handleApplyScriptAsSubtitles = () => {
+    if (generatedScript.length === 0) return;
+    let cumulative = 0;
+    const newSubtitles: SubtitleEntry[] = generatedScript.map((seg, i) => {
+      const start = cumulative;
+      const end = cumulative + seg.duration;
+      cumulative = end;
+      return { id: `script-sub-${Date.now()}-${i}`, text: seg.text, startTime: start, endTime: end };
+    });
+    setSubtitles((prev) => [...prev, ...newSubtitles]);
+    setProgressMsg(`${newSubtitles.length}件の字幕として適用しました`);
+    setActiveTool("subtitle");
+  };
+
+  // ===== AUTO FACE DETECT =====
+  const handleAutoFaceDetect = async () => {
+    if (!videoRef.current) return;
+    if (!('FaceDetector' in window)) {
+      setProgressMsg("このブラウザは顔検出に対応していません。Chrome最新版をお使いください。");
+      return;
+    }
+    setProcessing(true);
+    setProgressMsg("顔を検出中...");
+    try {
+      const detector = new (window as any).FaceDetector({ fastMode: true });
+      const video = videoRef.current;
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = video.videoWidth;
+      tempCanvas.height = video.videoHeight;
+      const tempCtx = tempCanvas.getContext('2d')!;
+      tempCtx.drawImage(video, 0, 0);
+      const faces = await detector.detect(tempCanvas);
+      if (faces.length === 0) {
+        setProgressMsg("顔が検出されませんでした。別のシーンで試してください。");
+      } else {
+        const newAreas = faces.map((face: any, i: number) => ({
+          id: `face-${Date.now()}-${i}`,
+          x: (face.boundingBox.x / video.videoWidth) * 100,
+          y: (face.boundingBox.y / video.videoHeight) * 100,
+          width: (face.boundingBox.width / video.videoWidth) * 100,
+          height: (face.boundingBox.height / video.videoHeight) * 100,
+          type: "mosaic" as const,
+          intensity: 15,
+          startTime: 0,
+          endTime: duration,
+        }));
+        setMosaicAreas((prev) => [...prev, ...newAreas]);
+        setProgressMsg(`${faces.length}人の顔を検出しました`);
+      }
+    } catch {
+      setProgressMsg("顔検出に失敗しました。Chrome最新版でお試しください。");
+    }
+    setProcessing(false);
+  };
+
+  const handleFullScanFaces = async () => {
+    if (!videoRef.current) return;
+    if (!('FaceDetector' in window)) {
+      setProgressMsg("このブラウザは顔検出に対応していません。Chrome最新版をお使いください。");
+      return;
+    }
+    setProcessing(true);
+    const video = videoRef.current;
+    const savedTime = video.currentTime;
+    const detector = new (window as any).FaceDetector({ fastMode: true });
+    const allAreas: MosaicArea[] = [];
+    const scanTimes: number[] = [];
+    for (let t = 0; t < duration; t += 2) scanTimes.push(t);
+    try {
+      for (let idx = 0; idx < scanTimes.length; idx++) {
+        const t = scanTimes[idx];
+        setProgressMsg(`スキャン中... ${idx + 1}/${scanTimes.length}フレーム`);
+        video.currentTime = t;
+        await new Promise<void>((resolve) => video.addEventListener('seeked', () => resolve(), { once: true }));
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = video.videoWidth;
+        tempCanvas.height = video.videoHeight;
+        const tempCtx = tempCanvas.getContext('2d')!;
+        tempCtx.drawImage(video, 0, 0);
+        const faces = await detector.detect(tempCanvas);
+        for (let i = 0; i < faces.length; i++) {
+          const face = faces[i];
+          allAreas.push({
+            id: `face-scan-${Date.now()}-${idx}-${i}`,
+            x: (face.boundingBox.x / video.videoWidth) * 100,
+            y: (face.boundingBox.y / video.videoHeight) * 100,
+            width: (face.boundingBox.width / video.videoWidth) * 100,
+            height: (face.boundingBox.height / video.videoHeight) * 100,
+            type: "mosaic" as const,
+            intensity: 15,
+            startTime: Math.max(0, t - 1),
+            endTime: Math.min(duration, t + 3),
+          });
+        }
+      }
+      video.currentTime = savedTime;
+      if (allAreas.length === 0) {
+        setProgressMsg("顔が検出されませんでした。");
+      } else {
+        setMosaicAreas((prev) => [...prev, ...allAreas]);
+        setProgressMsg(`動画全体で${allAreas.length}箇所の顔を検出しました`);
+      }
+    } catch {
+      setProgressMsg("全フレームスキャンに失敗しました。");
+      video.currentTime = savedTime;
+    }
+    setProcessing(false);
+  };
+
+  // ===== THUMBNAIL GENERATION =====
+  const extractThumbnailFrames = async () => {
+    if (!videoRef.current || duration === 0) return;
+    setThumbnailGenerating(true);
+    const video = videoRef.current;
+    const savedTime = video.currentTime;
+    const times = [duration * 0.25, duration * 0.5, duration * 0.75];
+    const frames: string[] = [];
+    for (const time of times) {
+      video.currentTime = time;
+      await new Promise<void>((resolve) => video.addEventListener('seeked', () => resolve(), { once: true }));
+      const canvas = document.createElement('canvas');
+      canvas.width = 320;
+      canvas.height = 180;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(video, 0, 0, 320, 180);
+      frames.push(canvas.toDataURL('image/jpeg', 0.8));
+    }
+    video.currentTime = savedTime;
+    setThumbnailFrames(frames);
+    setThumbnailGenerating(false);
+  };
+
+  const handleGenerateThumbnail = () => {
+    if (!videoRef.current) return;
+    const thumbCanvas = document.createElement('canvas');
+    thumbCanvas.width = 1280;
+    thumbCanvas.height = 720;
+    const ctx = thumbCanvas.getContext('2d')!;
+    // Use selected frame or current video frame
+    if (thumbnailFrames.length > selectedThumbnailFrame) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, 1280, 720);
+        applyThumbnailText(ctx, thumbCanvas);
+      };
+      img.src = thumbnailFrames[selectedThumbnailFrame];
+    } else {
+      ctx.drawImage(videoRef.current, 0, 0, 1280, 720);
+      applyThumbnailText(ctx, thumbCanvas);
+    }
+  };
+
+  const applyThumbnailText = (ctx: CanvasRenderingContext2D, thumbCanvas: HTMLCanvasElement) => {
+    if (thumbnailText) {
+      if (thumbnailTemplate === 0) {
+        // Big text center with red outline (YouTube style)
+        ctx.save();
+        ctx.font = "bold 96px 'Arial Black', Impact, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.strokeStyle = "#ff0000";
+        ctx.lineWidth = 8;
+        ctx.strokeText(thumbnailText, 640, 360);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(thumbnailText, 640, 360);
+        ctx.restore();
+      } else if (thumbnailTemplate === 1) {
+        // Text at bottom with gradient overlay
+        ctx.save();
+        const grad = ctx.createLinearGradient(0, 540, 0, 720);
+        grad.addColorStop(0, "rgba(0,0,0,0)");
+        grad.addColorStop(1, "rgba(0,0,0,0.85)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 540, 1280, 180);
+        ctx.font = "bold 72px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(thumbnailText, 640, 700);
+        ctx.restore();
+      } else {
+        // Split text: left "Before" style, right "After"
+        ctx.save();
+        const parts = thumbnailText.split(/\s+/);
+        const leftText = parts.slice(0, Math.ceil(parts.length / 2)).join(" ");
+        const rightText = parts.slice(Math.ceil(parts.length / 2)).join(" ");
+        ctx.font = "bold 64px sans-serif";
+        ctx.textBaseline = "middle";
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = 6;
+        ctx.textAlign = "left";
+        ctx.strokeText(leftText, 40, 360);
+        ctx.fillStyle = "#ff0000";
+        ctx.fillText(leftText, 40, 360);
+        ctx.textAlign = "right";
+        ctx.strokeText(rightText, 1240, 360);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(rightText, 1240, 360);
+        ctx.restore();
+      }
+    }
+    const link = document.createElement('a');
+    link.download = `thumbnail_${Date.now()}.png`;
+    link.href = thumbCanvas.toDataURL('image/png');
+    link.click();
+  };
+
+  // ===== SNS CAPTION GENERATION =====
+  const handleGenerateCaption = async () => {
+    const apiKey = whisperApiKey;
+    if (!apiKey) {
+      setProgressMsg("APIキーを字幕ツールで設定してください");
+      return;
+    }
+    setCaptionGenerating(true);
+    try {
+      const context = subtitles.length > 0
+        ? subtitles.map((s) => s.text).join(" ")
+        : captionTopic;
+      if (!context) {
+        setProgressMsg("字幕か話題テキストを入力してください");
+        setCaptionGenerating(false);
+        return;
+      }
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [{
+            role: "system",
+            content: `治療院・整体院の${captionPlatform}投稿用キャプションを作成してください。JSON形式で返してください: {"caption": "投稿文", "hashtags": ["#タグ1", "#タグ2", ...]}`
+          }, {
+            role: "user",
+            content: `動画の内容: ${context}\nプラットフォーム: ${captionPlatform}`
+          }],
+        }),
+      });
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content || "";
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        setGeneratedCaption(parsed.caption || "");
+        setGeneratedHashtags(parsed.hashtags || []);
+      } else {
+        setProgressMsg("キャプション解析に失敗しました");
+      }
+    } catch {
+      setProgressMsg("キャプション生成に失敗しました");
+    }
+    setCaptionGenerating(false);
   };
 
   // ===== AUTOSAVE =====
@@ -2102,21 +2512,43 @@ export default function VideoEditor() {
         ctx.fillText(sub.text, x, y);
       }
 
+      // Draw logo watermark preview
+      if (logoSettings.url && logoImgRef.current && logoImgRef.current.complete) {
+        const logoImg = logoImgRef.current;
+        const logoW = canvas.width * (logoSettings.size / 100);
+        const aspectRatio = logoImg.naturalHeight > 0 ? logoImg.naturalWidth / logoImg.naturalHeight : 1;
+        const logoH = logoW / aspectRatio;
+        const m = logoSettings.margin;
+        let lx = 0, ly = 0;
+        switch (logoSettings.position) {
+          case "top-left": lx = m; ly = m; break;
+          case "top-right": lx = canvas.width - logoW - m; ly = m; break;
+          case "bottom-left": lx = m; ly = canvas.height - logoH - m; break;
+          case "center": lx = (canvas.width - logoW) / 2; ly = (canvas.height - logoH) / 2; break;
+          case "bottom-right": default: lx = canvas.width - logoW - m; ly = canvas.height - logoH - m; break;
+        }
+        ctx.save();
+        ctx.globalAlpha = logoSettings.opacity / 100;
+        ctx.drawImage(logoImg, lx, ly, logoW, logoH);
+        ctx.restore();
+      }
+
       requestAnimationFrame(drawFrame);
     };
 
     const animId = requestAnimationFrame(drawFrame);
     return () => cancelAnimationFrame(animId);
-  }, [textOverlays, subtitles, filterSettings, getCanvasFilter, stickers, mosaicAreas, editingMosaicId, draggingId]);
+  }, [textOverlays, subtitles, filterSettings, getCanvasFilter, stickers, mosaicAreas, editingMosaicId, draggingId, logoSettings]);
 
   const showCanvas =
     textOverlays.length > 0 || subtitles.length > 0 || stickers.length > 0 ||
-    mosaicAreas.length > 0 ||
+    mosaicAreas.length > 0 || !!logoSettings.url ||
     filterSettings.brightness !== 100 || filterSettings.contrast !== 100 ||
     filterSettings.saturation !== 100 || filterSettings.temperature !== 0 || filterSettings.vignette !== 0;
 
   const TOOLS: { key: EditorTool; label: string; icon: string }[] = [
     { key: "template", label: "テンプレート", icon: "📋" },
+    { key: "script", label: "AI台本", icon: "📝" },
     { key: "silence", label: "無音カット", icon: "✂️" },
     { key: "trim", label: "トリミング", icon: "🎬" },
     { key: "text", label: "テロップ", icon: "T" },
@@ -2130,6 +2562,7 @@ export default function VideoEditor() {
     { key: "keyframe", label: "キーフレーム", icon: "◆" },
     { key: "mosaic", label: "モザイク", icon: "🔲" },
     { key: "chromakey", label: "クロマキー", icon: "🟩" },
+    { key: "logo", label: "ロゴ", icon: "🏷" },
     { key: "collage", label: "コラージュ", icon: "🖼" },
     { key: "slideshow", label: "スライドショー", icon: "🎞" },
     { key: "pip", label: "ワイプ", icon: "📺" },
@@ -2273,19 +2706,40 @@ export default function VideoEditor() {
             )}
             {/* Platform Tabs */}
             <div className="flex gap-1">
-              {(["youtube", "reels"] as const).map((platform) => (
+              {([
+                { key: "youtube", label: "🎬 YouTube" },
+                { key: "reels", label: "📱 Reels" },
+                { key: "therapist", label: "🏥 治療家" },
+              ] as { key: "youtube" | "reels" | "therapist"; label: string }[]).map(({ key, label }) => (
                 <button
-                  key={platform}
-                  onClick={() => setActiveTemplatePlatform(platform)}
-                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${activeTemplatePlatform === platform ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                  key={key}
+                  onClick={() => setActiveTemplatePlatform(key)}
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${activeTemplatePlatform === key ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
                 >
-                  {platform === "youtube" ? "🎬 YouTube" : "📱 Reels"}
+                  {label}
                 </button>
               ))}
             </div>
+            {/* Therapist Sub-Category Tabs */}
+            {activeTemplatePlatform === "therapist" && (
+              <div className="flex gap-1 overflow-x-auto scrollbar-hide pb-1">
+                {THERAPIST_CATEGORIES.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setActiveTherapistCategory(cat)}
+                    className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${activeTherapistCategory === cat ? "bg-teal-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            )}
             {/* Template Cards */}
             <div className="space-y-3">
-              {VIDEO_TEMPLATES.filter((t) => t.platform === activeTemplatePlatform).map((template) => (
+              {VIDEO_TEMPLATES.filter((t) =>
+                t.platform === activeTemplatePlatform &&
+                (activeTemplatePlatform !== "therapist" || t.category === activeTherapistCategory)
+              ).map((template) => (
                 <div key={template.id} className="bg-gray-800 border border-gray-700 rounded-xl p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
@@ -2315,6 +2769,88 @@ export default function VideoEditor() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* AI Script */}
+        {activeTool === "script" && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-sm font-bold text-gray-200 mb-1">AI台本生成</h3>
+              <p className="text-xs text-gray-500">テーマを入力するとAIが治療院向けの動画台本を生成します。字幕として直接適用できます。</p>
+            </div>
+            {/* API Key status */}
+            <div>
+              {whisperApiKey ? (
+                <div className="flex items-center gap-2 px-3 py-2 bg-green-900/40 border border-green-700 rounded-xl">
+                  <span className="text-xs text-green-400">✅ OpenAI APIキー設定済み</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-2 bg-yellow-900/40 border border-yellow-700 rounded-xl">
+                  <span className="text-xs text-yellow-400">⚠️ 字幕ツールでAPIキーを設定してください</span>
+                </div>
+              )}
+            </div>
+            {/* Topic input */}
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">テーマ・症状</label>
+              <input
+                type="text"
+                value={scriptTopic}
+                onChange={(e) => setScriptTopic(e.target.value)}
+                placeholder="例: 腰痛の原因と改善法"
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+            {/* Duration */}
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">動画の長さ</label>
+              <div className="grid grid-cols-3 gap-1">
+                {([{key:"short",label:"ショート\n1分"},{key:"medium",label:"通常\n3分"},{key:"long",label:"ロング\n5分"}] as const).map((d) => (
+                  <button key={d.key} onClick={() => setScriptDuration(d.key)} className={`py-2 rounded-lg text-xs font-medium transition-all whitespace-pre-line ${scriptDuration===d.key?"bg-indigo-600 text-white":"bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>{d.label}</button>
+                ))}
+              </div>
+            </div>
+            {/* Platform */}
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">プラットフォーム</label>
+              <div className="grid grid-cols-2 gap-1">
+                {([{key:"youtube",label:"🎬 YouTube"},{key:"reels",label:"📱 Reels"}] as const).map((p) => (
+                  <button key={p.key} onClick={() => setScriptPlatform(p.key)} className={`py-2 rounded-lg text-xs font-medium transition-all ${scriptPlatform===p.key?"bg-indigo-600 text-white":"bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>{p.label}</button>
+                ))}
+              </div>
+            </div>
+            {/* Generate button */}
+            <button
+              onClick={handleGenerateScript}
+              disabled={scriptGenerating || !whisperApiKey || !scriptTopic}
+              className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl text-sm font-bold hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 transition-all"
+            >
+              {scriptGenerating ? "台本を生成中..." : "🤖 台本を生成"}
+            </button>
+            {/* Generated script */}
+            {generatedScript.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-indigo-400 font-medium">{generatedScript.length}セグメント生成済み</p>
+                  <button onClick={() => setGeneratedScript([])} className="text-xs text-red-400 hover:text-red-300">クリア</button>
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-2 bg-gray-900 rounded-xl p-3">
+                  {generatedScript.map((seg, i) => (
+                    <div key={i} className="border border-gray-700 rounded-lg p-2">
+                      <p className="text-xs text-gray-300">{seg.text}</p>
+                      <p className="text-[10px] text-gray-600 mt-1">{seg.duration}秒</p>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={handleApplyScriptAsSubtitles}
+                  className="w-full py-2.5 bg-green-700 text-white rounded-xl text-sm font-bold hover:bg-green-600 transition-colors"
+                >
+                  字幕として適用
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -3154,6 +3690,27 @@ export default function VideoEditor() {
               <h3 className="text-sm font-bold text-gray-200">モザイク・ぼかし</h3>
               <button onClick={addMosaicArea} className="text-xs px-3 py-1.5 bg-indigo-600 rounded-lg text-white hover:bg-indigo-500">+ 追加</button>
             </div>
+            {/* Auto face detect */}
+            <div className="bg-gray-900 border border-gray-700 rounded-xl p-3 space-y-2">
+              <p className="text-xs font-bold text-gray-200">🤖 自動顔検出モザイク</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={handleAutoFaceDetect}
+                  disabled={processing}
+                  className="py-2 bg-indigo-700 text-white rounded-lg text-xs font-medium hover:bg-indigo-600 disabled:opacity-50 transition-colors"
+                >
+                  📸 現在のフレームで検出
+                </button>
+                <button
+                  onClick={handleFullScanFaces}
+                  disabled={processing}
+                  className="py-2 bg-purple-700 text-white rounded-lg text-xs font-medium hover:bg-purple-600 disabled:opacity-50 transition-colors"
+                >
+                  🎬 動画全体をスキャン
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-600">※Chrome最新版で利用可能</p>
+            </div>
             <p className="text-xs text-gray-500">プレビューでモザイク範囲を確認できます。「動画に適用」でFFmpegで書き出します。</p>
             {mosaicAreas.length === 0 && <p className="text-xs text-gray-500 text-center py-6">「+ 追加」でモザイクエリアを設定できます</p>}
             {mosaicAreas.map((area) => (
@@ -3273,6 +3830,87 @@ export default function VideoEditor() {
             <button onClick={handleApplyChromaKey} disabled={processing || !chromaKey.bgFile} className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-500 disabled:opacity-50 transition-colors">
               {processing ? "合成中..." : "クロマキーを適用"}
             </button>
+          </div>
+        )}
+        {/* Logo */}
+        {activeTool === "logo" && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-gray-200">ロゴ・透かし挿入</h3>
+            <p className="text-xs text-gray-500">院のロゴや透かしを動画に合成します。書き出し時に焼き込まれます。</p>
+            {/* Logo upload */}
+            <div>
+              <label className="text-xs text-gray-400 block mb-2">ロゴ画像</label>
+              <button onClick={() => logoFileInputRef.current?.click()} className="w-full p-4 border-2 border-dashed border-gray-700 rounded-xl text-center hover:border-teal-500 transition-colors">
+                <span className="text-2xl block mb-1">🏷</span>
+                <span className="text-xs text-gray-400">{logoSettings.file ? logoSettings.file.name : "ロゴ画像を選択（PNG推奨）"}</span>
+              </button>
+              <input ref={logoFileInputRef} type="file" accept="image/*" onChange={handleLogoFileSelect} className="hidden" />
+              {logoSettings.url && (
+                <div className="mt-2 flex justify-center bg-gray-800 rounded-xl p-3">
+                  <img src={logoSettings.url} className="max-h-20 object-contain" alt="ロゴプレビュー" />
+                </div>
+              )}
+            </div>
+            {/* Position selector */}
+            <div>
+              <label className="text-xs text-gray-400 block mb-2">表示位置</label>
+              <div className="grid grid-cols-3 gap-1 w-36 mx-auto">
+                {([
+                  { pos: "top-left" as LogoPosition, label: "↖" },
+                  { pos: null, label: "" },
+                  { pos: "top-right" as LogoPosition, label: "↗" },
+                  { pos: null, label: "" },
+                  { pos: "center" as LogoPosition, label: "⊙" },
+                  { pos: null, label: "" },
+                  { pos: "bottom-left" as LogoPosition, label: "↙" },
+                  { pos: null, label: "" },
+                  { pos: "bottom-right" as LogoPosition, label: "↘" },
+                ]).map((item, i) => (
+                  <button
+                    key={i}
+                    onClick={() => item.pos && setLogoSettings((p) => ({ ...p, position: item.pos! }))}
+                    disabled={!item.pos}
+                    className={`h-10 w-10 rounded-lg text-sm font-bold transition-all ${!item.pos ? "opacity-0 pointer-events-none" : logoSettings.position === item.pos ? "bg-teal-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Size slider */}
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">サイズ（動画幅の {logoSettings.size}%）</label>
+              <input type="range" min={5} max={30} step={1} value={logoSettings.size} onChange={(e) => setLogoSettings((p) => ({ ...p, size: parseInt(e.target.value) }))} className="w-full" />
+              <div className="flex justify-between text-[10px] text-gray-600"><span>小（5%）</span><span>大（30%）</span></div>
+            </div>
+            {/* Opacity slider */}
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">不透明度 {logoSettings.opacity}%</label>
+              <input type="range" min={0} max={100} step={5} value={logoSettings.opacity} onChange={(e) => setLogoSettings((p) => ({ ...p, opacity: parseInt(e.target.value) }))} className="w-full" />
+              <div className="flex justify-between text-[10px] text-gray-600"><span>透明</span><span>不透明</span></div>
+            </div>
+            {/* Margin slider */}
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">余白 {logoSettings.margin}px</label>
+              <input type="range" min={10} max={50} step={2} value={logoSettings.margin} onChange={(e) => setLogoSettings((p) => ({ ...p, margin: parseInt(e.target.value) }))} className="w-full" />
+            </div>
+            {/* Auto apply toggle label */}
+            <div className="flex items-center gap-2 bg-gray-800 rounded-xl px-3 py-2">
+              <div className="w-9 h-5 bg-teal-600 rounded-full relative cursor-default">
+                <div className="absolute right-0.5 top-0.5 w-4 h-4 bg-white rounded-full" />
+              </div>
+              <span className="text-xs text-gray-300">全動画に自動適用</span>
+            </div>
+            {/* Apply button */}
+            <button onClick={handleApplyLogoExport} disabled={processing || !logoSettings.file} className="w-full py-3 bg-teal-600 text-white rounded-xl text-sm font-bold hover:bg-teal-500 disabled:opacity-50 transition-colors">
+              {processing ? "合成中..." : "ロゴを動画に焼き込む"}
+            </button>
+            {/* Delete button */}
+            {logoSettings.file && (
+              <button onClick={() => setLogoSettings((p) => ({ ...p, file: null, url: "" }))} className="w-full py-2 bg-gray-800 text-red-400 rounded-xl text-xs hover:bg-gray-700 transition-colors">
+                ロゴを削除
+              </button>
+            )}
           </div>
         )}
         {/* Collage */}
@@ -3455,6 +4093,134 @@ export default function VideoEditor() {
                 <button onClick={handleExportGif} disabled={processing} className="w-full py-3 bg-green-700 text-white rounded-xl text-sm font-bold hover:bg-green-600 disabled:opacity-50 transition-colors">
                   {processing ? "GIF作成中..." : "GIFで書き出す"}
                 </button>
+              </div>
+            </div>
+
+            {/* Thumbnail Generation */}
+            <div className="pt-2 border-t border-gray-800">
+              <h4 className="text-sm font-bold text-gray-200 mb-2">サムネイル生成</h4>
+              <div className="space-y-3">
+                <button
+                  onClick={extractThumbnailFrames}
+                  disabled={thumbnailGenerating || !duration}
+                  className="w-full py-2 bg-gray-800 text-gray-300 rounded-xl text-xs font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                >
+                  {thumbnailGenerating ? "フレームを抽出中..." : "最適なシーンを選択（25%・50%・75%）"}
+                </button>
+                {thumbnailFrames.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {thumbnailFrames.map((frame, i) => (
+                      <div
+                        key={i}
+                        onClick={() => setSelectedThumbnailFrame(i)}
+                        className={`cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${selectedThumbnailFrame === i ? "border-indigo-500" : "border-gray-700 hover:border-gray-500"}`}
+                      >
+                        <img src={frame} alt={`フレーム${i + 1}`} className="w-full h-auto" />
+                        <p className="text-[9px] text-center text-gray-500 py-0.5">{i === 0 ? "25%" : i === 1 ? "50%" : "75%"}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">サムネイルテキスト</label>
+                  <input
+                    type="text"
+                    value={thumbnailText}
+                    onChange={(e) => setThumbnailText(e.target.value)}
+                    placeholder="例: 腰痛が3分で楽になる方法"
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-xl text-xs text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">テンプレート</label>
+                  <div className="grid grid-cols-3 gap-1">
+                    {["YouTube風\n大文字中央", "下部グラデ\nテキスト", "左右\n分割テキスト"].map((label, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setThumbnailTemplate(i)}
+                        className={`py-2 rounded-lg text-[10px] font-medium transition-all whitespace-pre-line ${thumbnailTemplate === i ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  onClick={handleGenerateThumbnail}
+                  disabled={!duration}
+                  className="w-full py-2.5 bg-orange-700 text-white rounded-xl text-sm font-bold hover:bg-orange-600 disabled:opacity-50 transition-colors"
+                >
+                  サムネイルをダウンロード (1280×720)
+                </button>
+              </div>
+            </div>
+
+            {/* SNS Caption Generation */}
+            <div className="pt-2 border-t border-gray-800">
+              <h4 className="text-sm font-bold text-gray-200 mb-2">SNSキャプション生成</h4>
+              {!whisperApiKey && (
+                <p className="text-xs text-yellow-400 mb-2">⚠️ 字幕ツールでOpenAI APIキーを設定してください</p>
+              )}
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">プラットフォーム</label>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(["Instagram", "YouTube", "TikTok"] as const).map((p) => (
+                      <button key={p} onClick={() => setCaptionPlatform(p)} className={`py-2 rounded-lg text-xs font-medium transition-all ${captionPlatform === p ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>{p}</button>
+                    ))}
+                  </div>
+                </div>
+                {subtitles.length > 0 ? (
+                  <p className="text-xs text-green-400">✅ 字幕データを使用します（{subtitles.length}件）</p>
+                ) : (
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">動画の話題（字幕がない場合）</label>
+                    <input
+                      type="text"
+                      value={captionTopic}
+                      onChange={(e) => setCaptionTopic(e.target.value)}
+                      placeholder="例: 腰痛改善のストレッチ紹介"
+                      className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-xl text-xs text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                )}
+                <button
+                  onClick={handleGenerateCaption}
+                  disabled={captionGenerating || !whisperApiKey}
+                  className="w-full py-2.5 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-xl text-sm font-bold hover:from-pink-500 hover:to-purple-500 disabled:opacity-50 transition-all"
+                >
+                  {captionGenerating ? "生成中..." : "キャプションを生成"}
+                </button>
+                {generatedCaption && (
+                  <div className="space-y-2">
+                    <div className="bg-gray-900 rounded-xl p-3 border border-gray-700">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[10px] text-gray-500 font-medium">投稿文</p>
+                        <button
+                          onClick={() => { try { navigator.clipboard.writeText(generatedCaption); setProgressMsg("投稿文をコピーしました"); } catch {} }}
+                          className="text-[10px] text-indigo-400 hover:text-indigo-300"
+                        >
+                          コピー
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-300 whitespace-pre-wrap">{generatedCaption}</p>
+                    </div>
+                    {generatedHashtags.length > 0 && (
+                      <div className="bg-gray-900 rounded-xl p-3 border border-gray-700">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-[10px] text-gray-500 font-medium">ハッシュタグ</p>
+                          <button
+                            onClick={() => { try { navigator.clipboard.writeText(generatedHashtags.join(" ")); setProgressMsg("ハッシュタグをコピーしました"); } catch {} }}
+                            className="text-[10px] text-indigo-400 hover:text-indigo-300"
+                          >
+                            コピー
+                          </button>
+                        </div>
+                        <p className="text-xs text-indigo-300">{generatedHashtags.join(" ")}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

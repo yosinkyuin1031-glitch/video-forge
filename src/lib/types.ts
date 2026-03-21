@@ -77,12 +77,23 @@ export const ASPECT_PRESETS: AspectRatioPreset[] = [
   { label: "Instagram広告", platform: "Instagram", ratio: "4:5", width: 1080, height: 1350 },
 ];
 
-export type EditorTool = "select" | "text" | "trim" | "silence" | "bgm" | "subtitle" | "export" | "speed" | "split" | "filter" | "transition" | "sticker" | "keyframe" | "collage" | "slideshow" | "pip" | "mosaic" | "chromakey" | "template";
+export type EditorTool = "select" | "text" | "trim" | "silence" | "bgm" | "subtitle" | "export" | "speed" | "split" | "filter" | "transition" | "sticker" | "keyframe" | "collage" | "slideshow" | "pip" | "mosaic" | "chromakey" | "template" | "logo" | "script";
+
+export type LogoPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right" | "center";
+
+export interface LogoSettings {
+  file: File | null;
+  url: string;
+  position: LogoPosition;
+  size: number; // 5-30 percentage of video width
+  opacity: number; // 0-100
+  margin: number; // 10-50 pixels
+}
 
 export interface VideoTemplate {
   id: string;
   name: string;
-  platform: "youtube" | "reels";
+  platform: "youtube" | "reels" | "therapist";
   category: string;
   description: string;
   // What this template creates

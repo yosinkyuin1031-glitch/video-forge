@@ -952,3 +952,71 @@ export async function applyChromaKey(
 
   return blob;
 }
+
+// ===== LOGO / WATERMARK =====
+export interface LogoInput {
+  videoFile: File;
+  logoFile: File;
+  position: "top-left" | "top-right" | "bottom-left" | "bottom-right" | "center";
+  size: number;    // 5-30, percentage of video width
+  opacity: number; // 0-100
+  margin: number;  // pixels
+}
+
+export async function applyLogo(
+  input: LogoInput,
+  onProgress?: (msg: string) => void
+): Promise<Blob> {
+  const ff = await getFFmpeg();
+
+  await ff.writeFile("logo_video", await fetchFile(input.videoFile));
+  await ff.writeFile("logo_img", await fetchFile(input.logoFile));
+
+  onProgress?.("ロゴを合成中...");
+
+  const sizeRatio = (input.size / 100).toFixed(3);
+  const alpha = (input.opacity / 100).toFixed(3);
+  const m = input.margin;
+
+  let x: string;
+  let y: string;
+  switch (input.position) {
+    case "top-left":
+      x = `${m}`; y = `${m}`; break;
+    case "top-right":
+      x = `W-w-${m}`; y = `${m}`; break;
+    case "bottom-left":
+      x = `${m}`; y = `H-h-${m}`; break;
+    case "center":
+      x = `(W-w)/2`; y = `(H-h)/2`; break;
+    case "bottom-right":
+    default:
+      x = `W-w-${m}`; y = `H-h-${m}`; break;
+  }
+
+  const filterComplex =
+    `[1:v]scale=iw*W*${sizeRatio}/iw:-1,format=rgba,` +
+    `colorchannelmixer=aa=${alpha}[logo];` +
+    `[0:v][logo]overlay=${x}:${y}[out]`;
+
+  await ff.exec([
+    "-i", "logo_video",
+    "-i", "logo_img",
+    "-filter_complex", filterComplex,
+    "-map", "[out]",
+    "-map", "0:a?",
+    "-c:v", "libx264",
+    "-c:a", "copy",
+    "-preset", "ultrafast",
+    "logo_out.mp4"
+  ]);
+
+  const result = await ff.readFile("logo_out.mp4");
+  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+
+  await ff.deleteFile("logo_video");
+  await ff.deleteFile("logo_img");
+  await ff.deleteFile("logo_out.mp4");
+
+  return blob;
+}
