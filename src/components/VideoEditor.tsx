@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { TextOverlay, SubtitleEntry, EditorTool, ASPECT_PRESETS, FONT_OPTIONS, ClipMarker, FilterSettings } from "@/lib/types";
-import { detectSilence, removeSilence, trimVideo, addBgm, exportWithAspectRatio, SilentSegment, changeSpeed, splitAndReorder, applyFilters } from "@/lib/ffmpeg-utils";
+import { TextOverlay, SubtitleEntry, EditorTool, ASPECT_PRESETS, FONT_OPTIONS, ClipMarker, FilterSettings, TransitionSetting, TransitionType, StickerOverlay } from "@/lib/types";
+import { detectSilence, removeSilence, trimVideo, addBgm, exportWithAspectRatio, SilentSegment, changeSpeed, splitAndReorder, applyFilters, applyTransitions } from "@/lib/ffmpeg-utils";
 
 // ===== UNDO/REDO HISTORY =====
 interface HistoryState {
@@ -258,6 +258,112 @@ export default function VideoEditor() {
       setProgressMsg("フィルター適用に失敗しました");
     }
     setProcessing(false);
+  };
+
+  // ===== TRANSITIONS =====
+  const DEFAULT_TRANSITION: TransitionSetting = { type: "none", duration: 0.5 };
+  const [transitionIn, setTransitionIn] = useState<TransitionSetting>({ ...DEFAULT_TRANSITION });
+  const [transitionOut, setTransitionOut] = useState<TransitionSetting>({ ...DEFAULT_TRANSITION });
+  const [clipTransitions, setClipTransitions] = useState<TransitionSetting[]>([]);
+
+  const TRANSITION_TYPES: { value: TransitionType; label: string; icon: string }[] = [
+    { value: "none", label: "なし", icon: "✕" },
+    { value: "fade", label: "フェード", icon: "◑" },
+    { value: "crossfade", label: "クロスフェード", icon: "⇌" },
+    { value: "wipe-left", label: "ワイプ左", icon: "◀" },
+    { value: "wipe-right", label: "ワイプ右", icon: "▶" },
+    { value: "zoom", label: "ズーム", icon: "⊕" },
+  ];
+
+  const handleApplyTransitions = async () => {
+    if (!videoFile) return;
+    await ensureFFmpeg();
+    setProcessing(true);
+    try {
+      const blob = await applyTransitions(videoFile, {
+        transitionInType: transitionIn.type,
+        transitionInDuration: transitionIn.duration,
+        transitionOutType: transitionOut.type,
+        transitionOutDuration: transitionOut.duration,
+        videoDuration: duration,
+      }, setProgressMsg);
+      const newFile = new File([blob], "transition.mp4", { type: "video/mp4" });
+      const newUrl = URL.createObjectURL(blob);
+      setVideoFile(newFile);
+      setVideoUrl(newUrl);
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      setProgressMsg("トランジション適用完了!");
+    } catch (e) {
+      setProgressMsg("トランジション適用に失敗しました");
+    }
+    setProcessing(false);
+  };
+
+  // Sync clipTransitions array length to clipMarkers count of boundaries
+  useEffect(() => {
+    if (clipMarkers.length < 2) {
+      setClipTransitions([]);
+      return;
+    }
+    const boundaryCount = clipMarkers.length - 1;
+    setClipTransitions((prev) => {
+      if (prev.length === boundaryCount) return prev;
+      const next: TransitionSetting[] = [];
+      for (let i = 0; i < boundaryCount; i++) {
+        next.push(prev[i] ?? { type: "none", duration: 0.5 });
+      }
+      return next;
+    });
+  }, [clipMarkers.length]);
+
+  // ===== STICKERS =====
+  const STICKER_CATEGORIES = [
+    {
+      label: "リアクション",
+      emojis: ["😀","😂","🤣","😍","🥰","😎","🤩","😱","😡","🥺","👍","👏","🙌","💪","🔥","❤️","💯","⭐","🎉","🎊"],
+    },
+    {
+      label: "矢印・記号",
+      emojis: ["➡️","⬅️","⬆️","⬇️","❗","❓","⭕","❌","✅","⚠️","💡","🔔","📌","🏷️","💬","🗯️","💭","📢","🎯","🔍"],
+    },
+    {
+      label: "装飾",
+      emojis: ["✨","💫","⚡","🌟","💥","💢","💦","🌈","🎵","🎶","🌸","🍀","🦋","🎀","👑","💎","🏆","🎁","🎈","🎗️"],
+    },
+    {
+      label: "SNS",
+      emojis: ["📱","💻","🖥️","📷","🎬","🎥","🎤","🎧","📺","📡","▶️","⏸️","⏹️","🔴","🟢","🔵","🟡","⚪","⚫","🟣"],
+    },
+  ];
+
+  const [stickers, setStickers] = useState<StickerOverlay[]>([]);
+  const [editingStickerId, setEditingStickerId] = useState<string | null>(null);
+  const [activeStickerCategory, setActiveStickerCategory] = useState(0);
+
+  const addSticker = (emoji: string) => {
+    const newSticker: StickerOverlay = {
+      id: `sticker-${Date.now()}`,
+      emoji,
+      x: 50,
+      y: 50,
+      size: 64,
+      rotation: 0,
+      startTime: currentTime,
+      endTime: Math.min(currentTime + 5, duration || currentTime + 5),
+      opacity: 1,
+      animation: "none",
+    };
+    setStickers((prev) => [...prev, newSticker]);
+    setEditingStickerId(newSticker.id);
+  };
+
+  const updateSticker = (id: string, updates: Partial<StickerOverlay>) => {
+    setStickers((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
+  };
+
+  const deleteSticker = (id: string) => {
+    setStickers((prev) => prev.filter((s) => s.id !== id));
+    if (editingStickerId === id) setEditingStickerId(null);
   };
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -654,11 +760,60 @@ export default function VideoEditor() {
         }
       }
 
+      // Draw stickers
+      for (const sticker of stickers) {
+        if (time >= sticker.startTime && time <= sticker.endTime) {
+          ctx.save();
+
+          const baseX = (sticker.x / 100) * canvas.width;
+          const baseY = (sticker.y / 100) * canvas.height;
+
+          // Compute animation offsets based on video currentTime
+          let offsetX = 0;
+          let offsetY = 0;
+          let scale = 1;
+          let extraRotation = 0;
+          const t = time;
+
+          switch (sticker.animation) {
+            case "bounce":
+              offsetY = -Math.abs(Math.sin(t * 3)) * 12;
+              break;
+            case "pulse":
+              scale = 1 + Math.sin(t * 4) * 0.15;
+              break;
+            case "spin":
+              extraRotation = (t * 90) % 360;
+              break;
+            case "float":
+              offsetX = Math.sin(t * 2) * 6;
+              offsetY = Math.cos(t * 2) * 4;
+              break;
+            default:
+              break;
+          }
+
+          ctx.globalAlpha = sticker.opacity;
+          ctx.translate(baseX + offsetX, baseY + offsetY);
+          ctx.rotate(((sticker.rotation + extraRotation) * Math.PI) / 180);
+          ctx.scale(scale, scale);
+
+          ctx.font = `${sticker.size}px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(sticker.emoji, 0, 0);
+
+          ctx.restore();
+        }
+      }
+
       // Draw subtitles
       for (const sub of subtitles) {
         if (time >= sub.startTime && time <= sub.endTime) {
           const fontSize = Math.max(16, Math.floor(canvas.height / 20));
           ctx.font = `bold ${fontSize}px sans-serif`;
+          ctx.textAlign = "left";
+          ctx.textBaseline = "alphabetic";
           const metrics = ctx.measureText(sub.text);
           const x = (canvas.width - metrics.width) / 2;
           const y = canvas.height - 40;
@@ -675,12 +830,13 @@ export default function VideoEditor() {
 
     const animId = requestAnimationFrame(drawFrame);
     return () => cancelAnimationFrame(animId);
-  }, [textOverlays, subtitles, filterSettings, getCanvasFilter]);
+  }, [textOverlays, subtitles, filterSettings, getCanvasFilter, stickers]);
 
   // Determine if canvas should be shown
   const showCanvas =
     textOverlays.length > 0 ||
     subtitles.length > 0 ||
+    stickers.length > 0 ||
     filterSettings.brightness !== 100 ||
     filterSettings.contrast !== 100 ||
     filterSettings.saturation !== 100 ||
@@ -696,7 +852,9 @@ export default function VideoEditor() {
     { key: "bgm", label: "BGM", icon: "🎵" },
     { key: "speed", label: "速度変更", icon: "⚡" },
     { key: "split", label: "分割", icon: "✂" },
+    { key: "transition", label: "トランジション", icon: "✨" },
     { key: "filter", label: "フィルター", icon: "🎨" },
+    { key: "sticker", label: "スタンプ", icon: "😀" },
     { key: "export", label: "書き出し", icon: "📤" },
   ];
 
@@ -1697,6 +1855,368 @@ export default function VideoEditor() {
                 {processing ? "処理中..." : "動画に適用"}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Transition Tool */}
+        {activeTool === "transition" && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-gray-200">トランジション</h3>
+            <p className="text-xs text-gray-500">動画の開始・終了に場面切替エフェクトを追加します</p>
+
+            {/* Transition In */}
+            <div className="bg-gray-800 rounded-xl p-3 space-y-3">
+              <p className="text-xs font-semibold text-indigo-300">動画の開始</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {TRANSITION_TYPES.map((t) => (
+                  <button
+                    key={t.value}
+                    onClick={() => setTransitionIn((prev) => ({ ...prev, type: t.value }))}
+                    className={`py-2 px-1 rounded-xl text-xs font-medium transition-all flex flex-col items-center gap-0.5 ${
+                      transitionIn.type === t.value
+                        ? "bg-indigo-600 text-white"
+                        : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                    }`}
+                  >
+                    <span className="text-base">{t.icon}</span>
+                    <span>{t.label}</span>
+                  </button>
+                ))}
+              </div>
+              {transitionIn.type !== "none" && (
+                <div>
+                  <label className="text-[10px] text-gray-500 block mb-1">
+                    デュレーション ({transitionIn.duration.toFixed(1)}秒)
+                  </label>
+                  <input
+                    type="range"
+                    min={0.3}
+                    max={2.0}
+                    step={0.1}
+                    value={transitionIn.duration}
+                    onChange={(e) => setTransitionIn((prev) => ({ ...prev, duration: parseFloat(e.target.value) }))}
+                    className="w-full"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Transition Out */}
+            <div className="bg-gray-800 rounded-xl p-3 space-y-3">
+              <p className="text-xs font-semibold text-purple-300">動画の終了</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {TRANSITION_TYPES.map((t) => (
+                  <button
+                    key={t.value}
+                    onClick={() => setTransitionOut((prev) => ({ ...prev, type: t.value }))}
+                    className={`py-2 px-1 rounded-xl text-xs font-medium transition-all flex flex-col items-center gap-0.5 ${
+                      transitionOut.type === t.value
+                        ? "bg-purple-600 text-white"
+                        : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                    }`}
+                  >
+                    <span className="text-base">{t.icon}</span>
+                    <span>{t.label}</span>
+                  </button>
+                ))}
+              </div>
+              {transitionOut.type !== "none" && (
+                <div>
+                  <label className="text-[10px] text-gray-500 block mb-1">
+                    デュレーション ({transitionOut.duration.toFixed(1)}秒)
+                  </label>
+                  <input
+                    type="range"
+                    min={0.3}
+                    max={2.0}
+                    step={0.1}
+                    value={transitionOut.duration}
+                    onChange={(e) => setTransitionOut((prev) => ({ ...prev, duration: parseFloat(e.target.value) }))}
+                    className="w-full"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Clip boundary transitions */}
+            {clipMarkers.length >= 2 && (
+              <div className="bg-gray-800 rounded-xl p-3 space-y-3">
+                <p className="text-xs font-semibold text-yellow-300">クリップ間のトランジション</p>
+                {clipTransitions.map((ct, i) => (
+                  <div key={i} className="space-y-2">
+                    <p className="text-[10px] text-gray-400">
+                      クリップ {i + 1} → {i + 2}（{formatTime(clipMarkers[i + 1]?.startTime ?? 0)}）
+                    </p>
+                    <div className="grid grid-cols-3 gap-1">
+                      {TRANSITION_TYPES.map((t) => (
+                        <button
+                          key={t.value}
+                          onClick={() =>
+                            setClipTransitions((prev) => {
+                              const next = [...prev];
+                              next[i] = { ...next[i], type: t.value };
+                              return next;
+                            })
+                          }
+                          className={`py-1.5 px-1 rounded-lg text-[10px] font-medium transition-all ${
+                            ct.type === t.value
+                              ? "bg-yellow-600 text-white"
+                              : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(transitionIn.type !== "none" || transitionOut.type !== "none") && (
+              <button
+                onClick={handleApplyTransitions}
+                disabled={processing}
+                className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl text-sm font-bold hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 transition-all"
+              >
+                {processing ? "適用中..." : "トランジションを適用"}
+              </button>
+            )}
+
+            {transitionIn.type === "none" && transitionOut.type === "none" && (
+              <p className="text-xs text-gray-500 text-center py-2">
+                上から開始・終了のエフェクトを選択してください
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Sticker Tool */}
+        {activeTool === "sticker" && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-gray-200">スタンプ追加</h3>
+            <p className="text-xs text-gray-500">絵文字スタンプを動画に配置できます</p>
+
+            {/* Category tabs */}
+            <div className="flex gap-1 overflow-x-auto scrollbar-hide pb-1">
+              {STICKER_CATEGORIES.map((cat, idx) => (
+                <button
+                  key={cat.label}
+                  onClick={() => setActiveStickerCategory(idx)}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    activeStickerCategory === idx
+                      ? "bg-indigo-600 text-white"
+                      : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Emoji grid */}
+            <div className="grid grid-cols-5 gap-1.5">
+              {STICKER_CATEGORIES[activeStickerCategory].emojis.map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => addSticker(emoji)}
+                  className="aspect-square flex items-center justify-center bg-gray-800 rounded-xl text-2xl hover:bg-gray-700 hover:scale-110 transition-all"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+
+            {/* Sticker list */}
+            {stickers.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-indigo-400 font-medium">配置済みスタンプ ({stickers.length})</p>
+                <div className="space-y-2 max-h-[420px] overflow-y-auto">
+                  {stickers.map((sticker) => (
+                    <div
+                      key={sticker.id}
+                      className={`p-3 rounded-xl border transition-colors ${
+                        editingStickerId === sticker.id
+                          ? "border-indigo-500 bg-gray-800"
+                          : "border-gray-700 bg-gray-800/50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">{sticker.emoji}</span>
+                          <button
+                            onClick={() => setEditingStickerId(sticker.id === editingStickerId ? null : sticker.id)}
+                            className="text-xs text-indigo-400"
+                          >
+                            {sticker.id === editingStickerId ? "閉じる" : "編集"}
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => deleteSticker(sticker.id)}
+                          className="text-xs text-red-400 hover:text-red-300"
+                        >
+                          削除
+                        </button>
+                      </div>
+
+                      {editingStickerId !== sticker.id && (
+                        <p className="text-[10px] text-gray-500">
+                          {formatTime(sticker.startTime)} - {formatTime(sticker.endTime)} / 位置 ({sticker.x}%, {sticker.y}%)
+                        </p>
+                      )}
+
+                      {editingStickerId === sticker.id && (
+                        <div className="space-y-3">
+                          {/* Size */}
+                          <div>
+                            <label className="text-[10px] text-gray-500 block mb-1">サイズ ({sticker.size}px)</label>
+                            <input
+                              type="range"
+                              min={24}
+                              max={200}
+                              value={sticker.size}
+                              onChange={(e) => updateSticker(sticker.id, { size: parseInt(e.target.value) })}
+                              className="w-full"
+                            />
+                          </div>
+
+                          {/* Rotation */}
+                          <div>
+                            <label className="text-[10px] text-gray-500 block mb-1">回転 ({sticker.rotation}°)</label>
+                            <input
+                              type="range"
+                              min={0}
+                              max={360}
+                              value={sticker.rotation}
+                              onChange={(e) => updateSticker(sticker.id, { rotation: parseInt(e.target.value) })}
+                              className="w-full"
+                            />
+                          </div>
+
+                          {/* Opacity */}
+                          <div>
+                            <label className="text-[10px] text-gray-500 block mb-1">
+                              不透明度 ({Math.round(sticker.opacity * 100)}%)
+                            </label>
+                            <input
+                              type="range"
+                              min={0}
+                              max={1}
+                              step={0.05}
+                              value={sticker.opacity}
+                              onChange={(e) => updateSticker(sticker.id, { opacity: parseFloat(e.target.value) })}
+                              className="w-full"
+                            />
+                          </div>
+
+                          {/* Position sliders */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] text-gray-500 block mb-1">X位置 ({sticker.x}%)</label>
+                              <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                value={sticker.x}
+                                onChange={(e) => updateSticker(sticker.id, { x: parseInt(e.target.value) })}
+                                className="w-full"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-gray-500 block mb-1">Y位置 ({sticker.y}%)</label>
+                              <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                value={sticker.y}
+                                onChange={(e) => updateSticker(sticker.id, { y: parseInt(e.target.value) })}
+                                className="w-full"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Position presets */}
+                          <div>
+                            <label className="text-[10px] text-gray-500 block mb-1">位置プリセット</label>
+                            <div className="grid grid-cols-3 gap-1">
+                              {[
+                                { label: "左上", x: 10, y: 15 },
+                                { label: "中央上", x: 50, y: 15 },
+                                { label: "右上", x: 85, y: 15 },
+                                { label: "左中", x: 10, y: 50 },
+                                { label: "中央", x: 50, y: 50 },
+                                { label: "右中", x: 85, y: 50 },
+                                { label: "左下", x: 10, y: 85 },
+                                { label: "中央下", x: 50, y: 85 },
+                                { label: "右下", x: 85, y: 85 },
+                              ].map((pos) => (
+                                <button
+                                  key={pos.label}
+                                  onClick={() => updateSticker(sticker.id, { x: pos.x, y: pos.y })}
+                                  className="px-1 py-1.5 bg-gray-700 rounded text-[10px] text-gray-400 hover:bg-gray-600 hover:text-gray-200 transition-colors"
+                                >
+                                  {pos.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Animation */}
+                          <div>
+                            <label className="text-[10px] text-gray-500 block mb-1">アニメーション</label>
+                            <div className="grid grid-cols-3 gap-1">
+                              {([
+                                { value: "none", label: "なし" },
+                                { value: "bounce", label: "バウンス" },
+                                { value: "pulse", label: "パルス" },
+                                { value: "spin", label: "スピン" },
+                                { value: "float", label: "フロート" },
+                              ] as const).map((anim) => (
+                                <button
+                                  key={anim.value}
+                                  onClick={() => updateSticker(sticker.id, { animation: anim.value })}
+                                  className={`py-1.5 rounded-lg text-[10px] font-medium transition-all ${
+                                    sticker.animation === anim.value
+                                      ? "bg-indigo-600 text-white"
+                                      : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                  }`}
+                                >
+                                  {anim.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Start/end time */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] text-gray-500 block mb-1">表示開始（秒）</label>
+                              <input
+                                type="number"
+                                step={0.1}
+                                value={sticker.startTime}
+                                onChange={(e) => updateSticker(sticker.id, { startTime: parseFloat(e.target.value) })}
+                                className="w-full px-2 py-1.5 bg-gray-900 border border-gray-700 rounded text-xs text-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-gray-500 block mb-1">表示終了（秒）</label>
+                              <input
+                                type="number"
+                                step={0.1}
+                                value={sticker.endTime}
+                                onChange={(e) => updateSticker(sticker.id, { endTime: parseFloat(e.target.value) })}
+                                className="w-full px-2 py-1.5 bg-gray-900 border border-gray-700 rounded text-xs text-white"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

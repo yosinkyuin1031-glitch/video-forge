@@ -390,6 +390,75 @@ export async function applyFilters(
   return blob;
 }
 
+export interface TransitionOptions {
+  transitionInType: string;
+  transitionInDuration: number;
+  transitionOutType: string;
+  transitionOutDuration: number;
+  videoDuration: number;
+}
+
+export async function applyTransitions(
+  file: File,
+  options: TransitionOptions,
+  onProgress?: (msg: string) => void
+): Promise<Blob> {
+  const ff = await getFFmpeg();
+  const data = await fetchFile(file);
+  await ff.writeFile("input", data);
+
+  onProgress?.("トランジションを適用中...");
+
+  const { transitionInType, transitionInDuration, transitionOutType, transitionOutDuration, videoDuration } = options;
+
+  const vfParts: string[] = [];
+  const afParts: string[] = [];
+
+  // Fade in
+  if (transitionInType === "fade") {
+    vfParts.push(`fade=in:st=0:d=${transitionInDuration}`);
+    afParts.push(`afade=t=in:ss=0:d=${transitionInDuration}`);
+  }
+
+  // Fade out
+  if (transitionOutType === "fade") {
+    const outStart = Math.max(0, videoDuration - transitionOutDuration);
+    vfParts.push(`fade=out:st=${outStart.toFixed(3)}:d=${transitionOutDuration}`);
+    afParts.push(`afade=t=out:st=${outStart.toFixed(3)}:d=${transitionOutDuration}`);
+  }
+
+  if (vfParts.length === 0) {
+    // No transitions, just copy
+    await ff.exec(["-i", "input", "-c", "copy", "transition_output.mp4"]);
+  } else {
+    const vfFilter = vfParts.join(",");
+    if (afParts.length > 0) {
+      const afFilter = afParts.join(",");
+      await ff.exec([
+        "-i", "input",
+        "-vf", vfFilter,
+        "-af", afFilter,
+        "transition_output.mp4"
+      ]);
+    } else {
+      await ff.exec([
+        "-i", "input",
+        "-vf", vfFilter,
+        "-c:a", "copy",
+        "transition_output.mp4"
+      ]);
+    }
+  }
+
+  const result = await ff.readFile("transition_output.mp4");
+  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+
+  await ff.deleteFile("input");
+  await ff.deleteFile("transition_output.mp4");
+
+  return blob;
+}
+
 export async function exportWithAspectRatio(
   file: File,
   width: number,

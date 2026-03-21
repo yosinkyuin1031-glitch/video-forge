@@ -54,7 +54,27 @@ export const ASPECT_PRESETS: AspectRatioPreset[] = [
   { label: "Instagram広告", platform: "Instagram", ratio: "4:5", width: 1080, height: 1350 },
 ];
 
-export type EditorTool = "select" | "text" | "trim" | "silence" | "bgm" | "subtitle" | "export" | "speed" | "split" | "filter";
+export type EditorTool = "select" | "text" | "trim" | "silence" | "bgm" | "subtitle" | "export" | "speed" | "split" | "filter" | "transition" | "sticker";
+
+export type TransitionType = "none" | "fade" | "crossfade" | "wipe-left" | "wipe-right" | "zoom";
+
+export interface TransitionSetting {
+  type: TransitionType;
+  duration: number; // 0.3 - 2.0 seconds
+}
+
+export interface StickerOverlay {
+  id: string;
+  emoji: string;
+  x: number; // 0-100 percentage
+  y: number; // 0-100 percentage
+  size: number; // 24-200 px
+  rotation: number; // 0-360 degrees
+  startTime: number;
+  endTime: number;
+  opacity: number; // 0-1
+  animation: "none" | "bounce" | "pulse" | "spin" | "float";
+}
 
 export interface ClipMarker {
   id: string;
