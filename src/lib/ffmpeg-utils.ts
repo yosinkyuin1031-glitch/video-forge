@@ -211,6 +211,185 @@ export async function addBgm(
   return blob;
 }
 
+export async function changeSpeed(
+  file: File,
+  speed: number,
+  onProgress?: (msg: string) => void
+): Promise<Blob> {
+  const ff = await getFFmpeg();
+  const data = await fetchFile(file);
+  await ff.writeFile("input", data);
+
+  onProgress?.(`速度を ${speed}x に変更中...`);
+
+  // Build atempo filter chain (atempo only accepts 0.5 to 2.0)
+  const videoFilter = `setpts=PTS/${speed}`;
+  let audioFilter = "";
+  if (speed > 2) {
+    // Chain multiple atempo filters: e.g. 3x = atempo=2.0,atempo=1.5
+    const filters: string[] = [];
+    let remaining = speed;
+    while (remaining > 2.0) {
+      filters.push("atempo=2.0");
+      remaining /= 2.0;
+    }
+    filters.push(`atempo=${remaining.toFixed(4)}`);
+    audioFilter = filters.join(",");
+  } else if (speed < 0.5) {
+    // Chain multiple atempo filters: e.g. 0.25x = atempo=0.5,atempo=0.5
+    const filters: string[] = [];
+    let remaining = speed;
+    while (remaining < 0.5) {
+      filters.push("atempo=0.5");
+      remaining /= 0.5;
+    }
+    filters.push(`atempo=${remaining.toFixed(4)}`);
+    audioFilter = filters.join(",");
+  } else {
+    audioFilter = `atempo=${speed}`;
+  }
+
+  await ff.exec([
+    "-i", "input",
+    "-filter:v", videoFilter,
+    "-filter:a", audioFilter,
+    "speed_output.mp4"
+  ]);
+
+  const result = await ff.readFile("speed_output.mp4");
+  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+
+  await ff.deleteFile("input");
+  await ff.deleteFile("speed_output.mp4");
+
+  return blob;
+}
+
+export interface ClipSegment {
+  id: string;
+  startTime: number;
+  endTime: number;
+}
+
+export async function splitAndReorder(
+  file: File,
+  clips: ClipSegment[],
+  onProgress?: (msg: string) => void
+): Promise<Blob> {
+  if (clips.length === 0) throw new Error("クリップがありません");
+
+  const ff = await getFFmpeg();
+  const data = await fetchFile(file);
+  await ff.writeFile("input", data);
+
+  const partFiles: string[] = [];
+  for (let i = 0; i < clips.length; i++) {
+    const clip = clips[i];
+    const partName = `clip${i}.mp4`;
+    onProgress?.(`クリップ ${i + 1}/${clips.length} を処理中...`);
+
+    await ff.exec([
+      "-i", "input",
+      "-ss", clip.startTime.toFixed(3),
+      "-to", clip.endTime.toFixed(3),
+      "-c", "copy",
+      "-avoid_negative_ts", "make_zero",
+      partName
+    ]);
+    partFiles.push(partName);
+  }
+
+  onProgress?.("クリップを結合中...");
+  const concatList = partFiles.map((f) => `file '${f}'`).join("\n");
+  await ff.writeFile("clip_concat.txt", concatList);
+
+  await ff.exec([
+    "-f", "concat",
+    "-safe", "0",
+    "-i", "clip_concat.txt",
+    "-c", "copy",
+    "clip_output.mp4"
+  ]);
+
+  const result = await ff.readFile("clip_output.mp4");
+  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+
+  for (const f of partFiles) {
+    await ff.deleteFile(f);
+  }
+  await ff.deleteFile("clip_concat.txt");
+  await ff.deleteFile("input");
+  await ff.deleteFile("clip_output.mp4");
+
+  return blob;
+}
+
+export interface FilterOptions {
+  brightness: number;  // 0-200, default 100
+  contrast: number;    // 0-200, default 100
+  saturation: number;  // 0-200, default 100
+  temperature: number; // -100 to 100, default 0
+  vignette: number;    // 0-100, default 0
+}
+
+export async function applyFilters(
+  file: File,
+  filters: FilterOptions,
+  onProgress?: (msg: string) => void
+): Promise<Blob> {
+  const ff = await getFFmpeg();
+  const data = await fetchFile(file);
+  await ff.writeFile("input", data);
+
+  onProgress?.("フィルターを適用中...");
+
+  // Build FFmpeg filter string
+  // brightness/contrast/saturation use eq filter (values normalized: eq expects -1 to 1 for brightness, 0-3 for contrast/saturation factor)
+  const brightnessVal = (filters.brightness - 100) / 100; // -1 to 1
+  const contrastVal = filters.contrast / 100;             // 0 to 2
+  const saturationVal = filters.saturation / 100;         // 0 to 2
+
+  let vfFilters = `eq=brightness=${brightnessVal.toFixed(3)}:contrast=${contrastVal.toFixed(3)}:saturation=${saturationVal.toFixed(3)}`;
+
+  // Temperature: use hue to shift color (warm = slight red boost, cool = slight blue boost)
+  if (filters.temperature !== 0) {
+    // Use colortemperature-like approach with curves or colorchannelmixer
+    const tempNorm = filters.temperature / 100;
+    if (tempNorm > 0) {
+      // Warm: boost red, reduce blue
+      const r = (1 + tempNorm * 0.3).toFixed(3);
+      const b = (1 - tempNorm * 0.3).toFixed(3);
+      vfFilters += `,colorchannelmixer=rr=${r}:bb=${b}`;
+    } else {
+      // Cool: boost blue, reduce red
+      const r = (1 + tempNorm * 0.3).toFixed(3);
+      const b = (1 - tempNorm * 0.3).toFixed(3);
+      vfFilters += `,colorchannelmixer=rr=${r}:bb=${b}`;
+    }
+  }
+
+  // Vignette
+  if (filters.vignette > 0) {
+    const angle = (filters.vignette / 100) * (Math.PI / 4);
+    vfFilters += `,vignette=angle=${angle.toFixed(4)}`;
+  }
+
+  await ff.exec([
+    "-i", "input",
+    "-vf", vfFilters,
+    "-c:a", "copy",
+    "filter_output.mp4"
+  ]);
+
+  const result = await ff.readFile("filter_output.mp4");
+  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+
+  await ff.deleteFile("input");
+  await ff.deleteFile("filter_output.mp4");
+
+  return blob;
+}
+
 export async function exportWithAspectRatio(
   file: File,
   width: number,

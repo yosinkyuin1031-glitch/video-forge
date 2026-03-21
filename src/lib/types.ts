@@ -54,4 +54,18 @@ export const ASPECT_PRESETS: AspectRatioPreset[] = [
   { label: "Instagram広告", platform: "Instagram", ratio: "4:5", width: 1080, height: 1350 },
 ];
 
-export type EditorTool = "select" | "text" | "trim" | "silence" | "bgm" | "subtitle" | "export";
+export type EditorTool = "select" | "text" | "trim" | "silence" | "bgm" | "subtitle" | "export" | "speed" | "split" | "filter";
+
+export interface ClipMarker {
+  id: string;
+  startTime: number;
+  endTime: number;
+}
+
+export interface FilterSettings {
+  brightness: number;  // 0-200, default 100
+  contrast: number;    // 0-200, default 100
+  saturation: number;  // 0-200, default 100
+  temperature: number; // -100 to 100, default 0
+  vignette: number;    // 0-100, default 0
+}
