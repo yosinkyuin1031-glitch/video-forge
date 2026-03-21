@@ -1071,9 +1071,9 @@ export default function VideoEditor() {
 
   const handleApplySpeed = async () => {
     if (!videoFile || playbackSpeed === 1 || processing) return;
-    await ensureFFmpeg();
     setProcessing(true);
     try {
+      await ensureFFmpeg();
       const blob = await changeSpeed(videoFile, playbackSpeed, setProgressMsg);
       const newFile = new File([blob], "speed.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -1081,8 +1081,7 @@ export default function VideoEditor() {
       setVideoFile(newFile); setPlaybackSpeed(1);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("速度変更完了!");
-    } catch { setProgressMsg("速度変更に失敗しました"); }
-    setProcessing(false);
+    } catch { setProgressMsg("速度変更に失敗しました"); } finally { setProcessing(false); }
   };
 
   // ===== SPLIT & REORDER =====
@@ -1117,7 +1116,7 @@ export default function VideoEditor() {
 
   const handleApplySplit = async () => {
     if (!videoFile || clipMarkers.length === 0 || processing) return;
-    await ensureFFmpeg(); setProcessing(true);
+    setProcessing(true); await ensureFFmpeg();
     try {
       const blob = await splitAndReorder(videoFile, clipMarkers, setProgressMsg);
       const newFile = new File([blob], "split.mp4", { type: "video/mp4" });
@@ -1126,8 +1125,7 @@ export default function VideoEditor() {
       setVideoFile(newFile); setClipMarkers([]);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("分割・並び替え完了!");
-    } catch { setProgressMsg("分割処理に失敗しました"); }
-    setProcessing(false);
+    } catch { setProgressMsg("分割処理に失敗しました"); } finally { setProcessing(false); }
   };
 
   // ===== FILTERS =====
@@ -1143,7 +1141,7 @@ export default function VideoEditor() {
 
   const handleApplyFiltersExport = async () => {
     if (!videoFile || processing) return;
-    await ensureFFmpeg(); setProcessing(true);
+    setProcessing(true); await ensureFFmpeg();
     try {
       const blob = await applyFilters(videoFile, filterSettings, setProgressMsg);
       const newFile = new File([blob], "filtered.mp4", { type: "video/mp4" });
@@ -1152,8 +1150,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("フィルター適用完了!");
-    } catch { setProgressMsg("フィルター適用に失敗しました"); }
-    setProcessing(false);
+    } catch { setProgressMsg("フィルター適用に失敗しました"); } finally { setProcessing(false); }
   };
 
   // ===== TRANSITIONS =====
@@ -1172,7 +1169,7 @@ export default function VideoEditor() {
 
   const handleApplyTransitions = async () => {
     if (!videoFile || processing) return;
-    await ensureFFmpeg(); setProcessing(true);
+    setProcessing(true); await ensureFFmpeg();
     try {
       const blob = await applyTransitions(videoFile, { transitionInType: transitionIn.type, transitionInDuration: transitionIn.duration, transitionOutType: transitionOut.type, transitionOutDuration: transitionOut.duration, videoDuration: duration }, setProgressMsg);
       const newFile = new File([blob], "transition.mp4", { type: "video/mp4" });
@@ -1181,8 +1178,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("トランジション適用完了!");
-    } catch { setProgressMsg("トランジション適用に失敗しました"); }
-    setProcessing(false);
+    } catch { setProgressMsg("トランジション適用に失敗しました"); } finally { setProcessing(false); }
   };
 
   useEffect(() => {
@@ -1245,7 +1241,7 @@ export default function VideoEditor() {
   };
   const handleCollageFileSelect = (index: number, file: File) => {
     const url = URL.createObjectURL(file);
-    setCollageSettings((prev) => { const newItems = [...prev.items]; newItems[index] = { ...newItems[index], file, url }; return { ...prev, items: newItems }; });
+    setCollageSettings((prev) => { const newItems = [...prev.items]; if (newItems[index].url && newItems[index].url.startsWith("blob:")) URL.revokeObjectURL(newItems[index].url); newItems[index] = { ...newItems[index], file, url }; return { ...prev, items: newItems }; });
   };
   const handleCreateCollage = async () => {
     const { items, layout, borderWidth, borderColor, outputDuration } = collageSettings;
@@ -1253,7 +1249,7 @@ export default function VideoEditor() {
     const layoutOption = COLLAGE_LAYOUT_OPTIONS.find((o) => o.key === layout);
     if (!layoutOption || readyFiles.length < layoutOption.count) { setProgressMsg(`すべてのスロット(${layoutOption?.count}個)に動画をアップロードしてください`); return; }
     if (processing) return;
-    await ensureFFmpeg(); setProcessing(true);
+    setProcessing(true); await ensureFFmpeg();
     try {
       const blob = await createCollage({ files: readyFiles, layout, borderWidth, borderColor, outputDuration }, setProgressMsg);
       const newFile = new File([blob], "collage.mp4", { type: "video/mp4" });
@@ -1262,8 +1258,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("コラージュ作成完了!");
-    } catch { setProgressMsg("コラージュ作成に失敗しました"); }
-    setProcessing(false);
+    } catch { setProgressMsg("コラージュ作成に失敗しました"); } finally { setProcessing(false); }
   };
 
   // ===== SLIDESHOW =====
@@ -1289,7 +1284,7 @@ export default function VideoEditor() {
   const handleCreateSlideshow = async () => {
     if (slideshowSettings.images.length < 1) { setProgressMsg("1枚以上の画像をアップロードしてください"); return; }
     if (processing) return;
-    await ensureFFmpeg(); setProcessing(true);
+    setProcessing(true); await ensureFFmpeg();
     try {
       const blob = await createSlideshow({ images: slideshowSettings.images.map((img) => ({ file: img.file, duration: img.duration })), transition: slideshowSettings.transition, transitionDuration: slideshowSettings.transitionDuration }, setProgressMsg);
       const newFile = new File([blob], "slideshow.mp4", { type: "video/mp4" });
@@ -1298,18 +1293,17 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("スライドショー作成完了!");
-    } catch { setProgressMsg("スライドショー作成に失敗しました"); }
-    setProcessing(false);
+    } catch { setProgressMsg("スライドショー作成に失敗しました"); } finally { setProcessing(false); }
   };
 
   // ===== PIP =====
   const [pipSettings, setPipSettings] = useState<PipSettings>({ file: null, url: "", position: "bottom-right", size: 25, borderRadius: 0, borderWidth: 2, borderColor: "#ffffff", startTime: 0, endTime: 0 });
   const pipFileInputRef = useRef<HTMLInputElement>(null);
-  const handlePipFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setPipSettings((prev) => ({ ...prev, file, url: URL.createObjectURL(file) })); };
+  const handlePipFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setPipSettings((prev) => { if (prev.url && prev.url.startsWith("blob:")) URL.revokeObjectURL(prev.url); return { ...prev, file, url: URL.createObjectURL(file) }; }); };
   const handleApplyPip = async () => {
     if (!videoFile || !pipSettings.file) { setProgressMsg("メイン動画とワイプ動画が必要です"); return; }
     if (processing) return;
-    await ensureFFmpeg(); setProcessing(true);
+    setProcessing(true); await ensureFFmpeg();
     try {
       const pipEnd = pipSettings.endTime > pipSettings.startTime ? pipSettings.endTime : duration;
       const blob = await applyPip({ mainFile: videoFile, pipFile: pipSettings.file, position: pipSettings.position, size: pipSettings.size, borderWidth: pipSettings.borderWidth, borderColor: pipSettings.borderColor, startTime: pipSettings.startTime, endTime: pipEnd }, setProgressMsg);
@@ -1319,8 +1313,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("ワイプ適用完了!");
-    } catch { setProgressMsg("ワイプ適用に失敗しました"); }
-    setProcessing(false);
+    } catch { setProgressMsg("ワイプ適用に失敗しました"); } finally { setProcessing(false); }
   };
 
   // ===== GIF EXPORT =====
@@ -1330,15 +1323,14 @@ export default function VideoEditor() {
   const [gifWidth, setGifWidth] = useState(480);
   const handleExportGif = async () => {
     if (!videoFile || processing) return;
-    await ensureFFmpeg(); setProcessing(true);
+    setProcessing(true); await ensureFFmpeg();
     try {
       const blob = await exportGif({ file: videoFile, startTime: gifStart, endTime: Math.min(gifEnd, duration), fps: gifFps, width: gifWidth }, setProgressMsg);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = `videoforge_${Date.now()}.gif`; a.click();
       URL.revokeObjectURL(url);
       setProgressMsg("GIF書き出し完了!");
-    } catch { setProgressMsg("GIF書き出しに失敗しました"); }
-    setProcessing(false);
+    } catch { setProgressMsg("GIF書き出しに失敗しました"); } finally { setProcessing(false); }
   };
 
   // ===== MOSAIC =====
@@ -1355,7 +1347,7 @@ export default function VideoEditor() {
 
   const handleApplyMosaic = async () => {
     if (!videoFile || mosaicAreas.length === 0 || processing) return;
-    await ensureFFmpeg(); setProcessing(true);
+    setProcessing(true); await ensureFFmpeg();
     try {
       const vw = videoRef.current?.videoWidth || 1280;
       const vh = videoRef.current?.videoHeight || 720;
@@ -1366,8 +1358,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("モザイク適用完了!");
-    } catch { setProgressMsg("モザイク適用に失敗しました"); }
-    setProcessing(false);
+    } catch { setProgressMsg("モザイク適用に失敗しました"); } finally { setProcessing(false); }
   };
 
   // ===== CHROMA KEY =====
@@ -1377,13 +1368,13 @@ export default function VideoEditor() {
   const handleChromaBgSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setChromaKey((prev) => ({ ...prev, bgFile: file, bgUrl: URL.createObjectURL(file) }));
+    setChromaKey((prev) => { if (prev.bgUrl && prev.bgUrl.startsWith("blob:")) URL.revokeObjectURL(prev.bgUrl); return { ...prev, bgFile: file, bgUrl: URL.createObjectURL(file) }; });
   };
 
   const handleApplyChromaKey = async () => {
     if (!videoFile || !chromaKey.bgFile) { setProgressMsg("メイン動画と背景ファイルが必要です"); return; }
     if (processing) return;
-    await ensureFFmpeg(); setProcessing(true);
+    setProcessing(true); await ensureFFmpeg();
     try {
       const isImage = chromaKey.bgFile.type.startsWith("image/");
       const blob = await applyChromaKey({ videoFile, bgFile: chromaKey.bgFile, bgIsImage: isImage, keyColor: chromaKey.keyColor, similarity: chromaKey.similarity, blend: chromaKey.blend }, setProgressMsg);
@@ -1393,8 +1384,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("クロマキー適用完了!");
-    } catch { setProgressMsg("クロマキー適用に失敗しました"); }
-    setProcessing(false);
+    } catch { setProgressMsg("クロマキー適用に失敗しました"); } finally { setProcessing(false); }
   };
 
   // ===== LOGO =====
@@ -1405,6 +1395,7 @@ export default function VideoEditor() {
   const handleLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setLogoSettings((prev) => { if (prev.url && prev.url.startsWith("blob:")) URL.revokeObjectURL(prev.url); return prev; });
     const url = URL.createObjectURL(file);
     setLogoSettings((prev) => ({ ...prev, file, url }));
     const img = new Image();
@@ -1415,7 +1406,7 @@ export default function VideoEditor() {
   const handleApplyLogoExport = async () => {
     if (!videoFile || !logoSettings.file) { setProgressMsg("動画とロゴ画像が必要です"); return; }
     if (processing) return;
-    await ensureFFmpeg(); setProcessing(true);
+    setProcessing(true); await ensureFFmpeg();
     try {
       const blob = await applyLogo({ videoFile, logoFile: logoSettings.file, position: logoSettings.position, size: logoSettings.size, opacity: logoSettings.opacity, margin: logoSettings.margin }, setProgressMsg);
       const newFile = new File([blob], "logo.mp4", { type: "video/mp4" });
@@ -1424,8 +1415,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("ロゴ合成完了!");
-    } catch { setProgressMsg("ロゴ合成に失敗しました"); }
-    setProcessing(false);
+    } catch { setProgressMsg("ロゴ合成に失敗しました"); } finally { setProcessing(false); }
   };
 
   // ===== TEMPLATE =====
@@ -1494,7 +1484,7 @@ export default function VideoEditor() {
   // ===== AI SCRIPT GENERATION =====
   const handleGenerateScript = async () => {
     const apiKey = whisperApiKey;
-    if (!apiKey || !scriptTopic) return;
+    if (!apiKey || !scriptTopic || scriptGenerating) return;
     setScriptGenerating(true);
     try {
       const durationMap = { short: "1分（約200文字）", medium: "3分（約600文字）", long: "5分（約1000文字）" };
@@ -2003,8 +1993,7 @@ export default function VideoEditor() {
     try {
       const { getFFmpeg } = await import("@/lib/ffmpeg-utils");
       await getFFmpeg(); setFfmpegLoaded(true);
-    } catch { setProgressMsg("FFmpegの読み込みに失敗しました。ブラウザを更新してください。"); }
-    setFfmpegLoading(false);
+    } catch { setProgressMsg("FFmpegの読み込みに失敗しました。ブラウザを更新してください。"); } finally { setFfmpegLoading(false); }
   }, [ffmpegLoaded]);
 
   const handleVideoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2055,18 +2044,17 @@ export default function VideoEditor() {
 
   const handleDetectSilence = async () => {
     if (!videoFile || processing) return;
-    await ensureFFmpeg(); setProcessing(true);
+    setProcessing(true); await ensureFFmpeg();
     try {
       const segments = await detectSilence(videoFile, silenceThreshold, silenceMinDuration, setProgressMsg);
       setSilentSegments(segments);
       setProgressMsg(`${segments.length}箇所の無音区間を検出しました`);
-    } catch { setProgressMsg("無音検出に失敗しました"); }
-    setProcessing(false);
+    } catch { setProgressMsg("無音検出に失敗しました"); } finally { setProcessing(false); }
   };
 
   const handleRemoveSilence = async () => {
     if (!videoFile || silentSegments.length === 0 || processing) return;
-    await ensureFFmpeg(); setProcessing(true);
+    setProcessing(true); await ensureFFmpeg();
     try {
       const blob = await removeSilence(videoFile, silentSegments, 0.1, setProgressMsg);
       const newFile = new File([blob], "edited.mp4", { type: "video/mp4" });
@@ -2075,13 +2063,12 @@ export default function VideoEditor() {
       setVideoFile(newFile); setSilentSegments([]);
       pushHistory({ textOverlays, subtitles, silentSegments: [], videoUrl: newUrl });
       setProgressMsg("無音カット完了!");
-    } catch { setProgressMsg("無音カットに失敗しました"); }
-    setProcessing(false);
+    } catch { setProgressMsg("無音カットに失敗しました"); } finally { setProcessing(false); }
   };
 
   const handleTrim = async () => {
     if (!videoFile || processing) return;
-    await ensureFFmpeg(); setProcessing(true);
+    setProcessing(true); await ensureFFmpeg();
     try {
       const blob = await trimVideo(videoFile, trimStart, trimEnd, setProgressMsg);
       const newFile = new File([blob], "trimmed.mp4", { type: "video/mp4" });
@@ -2090,8 +2077,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("トリミング完了!");
-    } catch { setProgressMsg("トリミングに失敗しました"); }
-    setProcessing(false);
+    } catch { setProgressMsg("トリミングに失敗しました"); } finally { setProcessing(false); }
   };
 
   const addTextOverlay = () => {
@@ -2218,7 +2204,7 @@ export default function VideoEditor() {
 
   const handleAddBgm = async () => {
     if (!videoFile || !bgmFile || processing) return;
-    await ensureFFmpeg(); setProcessing(true);
+    setProcessing(true); await ensureFFmpeg();
     try {
       const blob = await addBgm(videoFile, bgmFile, bgmVolume, setProgressMsg);
       const newFile = new File([blob], "with-bgm.mp4", { type: "video/mp4" });
@@ -2227,8 +2213,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("BGM追加完了!");
-    } catch { setProgressMsg("BGM追加に失敗しました"); }
-    setProcessing(false);
+    } catch { setProgressMsg("BGM追加に失敗しました"); } finally { setProcessing(false); }
   };
 
   const bgmLibraryUrlRef = useRef<string | null>(null);
@@ -2284,15 +2269,14 @@ export default function VideoEditor() {
   const handleExport = async () => {
     if (!videoFile || processing) return;
     const preset = ASPECT_PRESETS[selectedPresetIdx];
-    await ensureFFmpeg(); setProcessing(true);
+    setProcessing(true); await ensureFFmpeg();
     try {
       const blob = await exportWithAspectRatio(videoFile, preset.width, preset.height, setProgressMsg);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = `videoforge_${preset.platform}_${Date.now()}.mp4`; a.click();
       URL.revokeObjectURL(url);
       setProgressMsg("エクスポート完了!");
-    } catch { setProgressMsg("エクスポートに失敗しました"); }
-    setProcessing(false);
+    } catch { setProgressMsg("エクスポートに失敗しました"); } finally { setProcessing(false); }
   };
 
   const handleDownloadOriginal = () => {
@@ -2933,10 +2917,10 @@ export default function VideoEditor() {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "処理に失敗しました";
       setProgressMsg(`エラー: ${msg}`);
+    } finally {
+      setAutoRunning(false);
+      setProcessing(false);
     }
-
-    setAutoRunning(false);
-    setProcessing(false);
   };
 
   const TOOLS: { key: EditorTool; label: string; icon: string }[] = [

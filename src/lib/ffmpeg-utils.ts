@@ -3,13 +3,30 @@ import { toBlobURL, fetchFile } from "@ffmpeg/util";
 
 let ffmpeg: FFmpeg | null = null;
 
+async function waitForCrossOriginIsolation(maxWaitMs: number = 5000): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  if (window.crossOriginIsolated) return true;
+  if (typeof SharedArrayBuffer !== "undefined") return true;
+
+  // Wait for coi-serviceworker to activate
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    await new Promise((r) => setTimeout(r, 500));
+    if (window.crossOriginIsolated || typeof SharedArrayBuffer !== "undefined") {
+      return true;
+    }
+  }
+  return typeof SharedArrayBuffer !== "undefined";
+}
+
 export async function getFFmpeg(): Promise<FFmpeg> {
   if (ffmpeg && ffmpeg.loaded) return ffmpeg;
 
-  // SharedArrayBuffer check
-  if (typeof SharedArrayBuffer === "undefined") {
+  // Wait for cross-origin isolation (coi-serviceworker)
+  const isolated = await waitForCrossOriginIsolation(5000);
+  if (!isolated) {
     throw new Error(
-      "SharedArrayBufferが利用できません。ブラウザのセキュリティヘッダー(COOP/COEP)が必要です。ページを再読み込みしてください。"
+      "SharedArrayBufferが利用できません。ページを再読み込みしてください。（初回アクセス時は自動でリロードされます）"
     );
   }
 

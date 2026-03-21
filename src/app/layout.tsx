@@ -9,6 +9,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
+      <head>
+        <script src="/coi-serviceworker.js" />
+      </head>
       <body className="min-h-screen">{children}</body>
     </html>
   );
