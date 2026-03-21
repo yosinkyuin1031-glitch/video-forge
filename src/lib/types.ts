@@ -1,3 +1,9 @@
+export type TextAnimation =
+  | "none" | "fade-in" | "fade-out" | "fade-in-out"
+  | "typewriter" | "slide-left" | "slide-right" | "slide-up" | "slide-down"
+  | "bounce-in" | "scale-up" | "scale-down" | "rotate-in"
+  | "blur-in" | "shake" | "wave" | "rainbow" | "glow" | "flicker" | "zoom-in";
+
 export interface TextOverlay {
   id: string;
   text: string;
@@ -17,6 +23,7 @@ export interface TextOverlay {
   shadowBlur: number;
   shadowOffsetX: number;
   shadowOffsetY: number;
+  animation: TextAnimation;
 }
 
 export const FONT_OPTIONS = [
@@ -54,7 +61,7 @@ export const ASPECT_PRESETS: AspectRatioPreset[] = [
   { label: "Instagram広告", platform: "Instagram", ratio: "4:5", width: 1080, height: 1350 },
 ];
 
-export type EditorTool = "select" | "text" | "trim" | "silence" | "bgm" | "subtitle" | "export" | "speed" | "split" | "filter" | "transition" | "sticker" | "collage" | "slideshow" | "pip";
+export type EditorTool = "select" | "text" | "trim" | "silence" | "bgm" | "subtitle" | "export" | "speed" | "split" | "filter" | "transition" | "sticker" | "collage" | "slideshow" | "pip" | "mosaic" | "chromakey";
 
 export type CollageLayout = "2h" | "2v" | "3h" | "4grid" | "6grid" | "9grid";
 
@@ -131,4 +138,25 @@ export interface FilterSettings {
   saturation: number;  // 0-200, default 100
   temperature: number; // -100 to 100, default 0
   vignette: number;    // 0-100, default 0
+}
+
+export interface MosaicArea {
+  id: string;
+  x: number; // 0-100 percentage
+  y: number; // 0-100 percentage
+  width: number; // 5-100 percentage
+  height: number; // 5-100 percentage
+  type: "mosaic" | "blur" | "black";
+  intensity: number; // 1-20 for mosaic block size, 1-30 for blur radius
+  startTime: number;
+  endTime: number;
+}
+
+export interface ChromaKeySettings {
+  enabled: boolean;
+  bgFile: File | null;
+  bgUrl: string;
+  keyColor: string; // hex color to remove, default "#00ff00"
+  similarity: number; // 0.1-0.5, default 0.3
+  blend: number; // 0-1, default 0.1
 }

@@ -791,3 +791,144 @@ export async function exportWithAspectRatio(
 
   return blob;
 }
+
+// ===== MOSAIC / BLUR =====
+export interface MosaicAreaInput {
+  x: number; // 0-100 percentage
+  y: number; // 0-100 percentage
+  width: number; // 0-100 percentage
+  height: number; // 0-100 percentage
+  type: "mosaic" | "blur" | "black";
+  intensity: number;
+  startTime: number;
+  endTime: number;
+}
+
+export async function applyMosaicAreas(
+  file: File,
+  areas: MosaicAreaInput[],
+  videoWidth: number,
+  videoHeight: number,
+  onProgress?: (msg: string) => void
+): Promise<Blob> {
+  if (areas.length === 0) throw new Error("モザイクエリアがありません");
+
+  const ff = await getFFmpeg();
+  await ff.writeFile("mosaic_in", await fetchFile(file));
+
+  onProgress?.("モザイク/ぼかしを適用中...");
+
+  // Build filter_complex for each area
+  // We chain overlays one after another
+  let filterParts: string[] = [];
+  let prevLabel = "0:v";
+
+  for (let i = 0; i < areas.length; i++) {
+    const area = areas[i];
+    const px = Math.round((area.x / 100) * videoWidth);
+    const py = Math.round((area.y / 100) * videoHeight);
+    const pw = Math.max(4, Math.round((area.width / 100) * videoWidth));
+    const ph = Math.max(4, Math.round((area.height / 100) * videoHeight));
+    const enable = `between(t,${area.startTime},${area.endTime})`;
+    const outLabel = i === areas.length - 1 ? "vout" : `v${i}`;
+
+    if (area.type === "black") {
+      filterParts.push(`[${prevLabel}]drawbox=x=${px}:y=${py}:w=${pw}:h=${ph}:color=black@1:t=fill:enable='${enable}'[${outLabel}]`);
+    } else if (area.type === "blur") {
+      const blurAmount = Math.max(1, area.intensity);
+      filterParts.push(
+        `[${prevLabel}]split[base${i}][blur_src${i}];` +
+        `[blur_src${i}]crop=${pw}:${ph}:${px}:${py},boxblur=${blurAmount}[blurred${i}];` +
+        `[base${i}][blurred${i}]overlay=${px}:${py}:enable='${enable}'[${outLabel}]`
+      );
+    } else {
+      // mosaic: scale down then up with nearest neighbor
+      const blockSize = Math.max(2, area.intensity);
+      const scaledW = Math.max(1, Math.round(pw / blockSize));
+      const scaledH = Math.max(1, Math.round(ph / blockSize));
+      filterParts.push(
+        `[${prevLabel}]split[base${i}][mosaic_src${i}];` +
+        `[mosaic_src${i}]crop=${pw}:${ph}:${px}:${py},scale=${scaledW}:${scaledH},scale=${pw}:${ph}:flags=neighbor[pixelated${i}];` +
+        `[base${i}][pixelated${i}]overlay=${px}:${py}:enable='${enable}'[${outLabel}]`
+      );
+    }
+    prevLabel = outLabel;
+  }
+
+  const filterComplex = filterParts.join(";");
+
+  await ff.exec([
+    "-i", "mosaic_in",
+    "-filter_complex", filterComplex,
+    "-map", "[vout]",
+    "-map", "0:a?",
+    "-c:v", "libx264",
+    "-c:a", "copy",
+    "-preset", "ultrafast",
+    "mosaic_out.mp4"
+  ]);
+
+  const result = await ff.readFile("mosaic_out.mp4");
+  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+
+  await ff.deleteFile("mosaic_in");
+  await ff.deleteFile("mosaic_out.mp4");
+
+  return blob;
+}
+
+// ===== CHROMA KEY =====
+export interface ChromaKeyInput {
+  videoFile: File;
+  bgFile: File;
+  bgIsImage: boolean;
+  keyColor: string; // hex e.g. "#00ff00"
+  similarity: number; // 0.01-0.5
+  blend: number; // 0-1
+}
+
+export async function applyChromaKey(
+  input: ChromaKeyInput,
+  onProgress?: (msg: string) => void
+): Promise<Blob> {
+  const ff = await getFFmpeg();
+
+  await ff.writeFile("ck_video", await fetchFile(input.videoFile));
+  await ff.writeFile("ck_bg", await fetchFile(input.bgFile));
+
+  onProgress?.("クロマキー合成中...");
+
+  // Remove # from hex color
+  const color = input.keyColor.replace("#", "0x");
+
+  // Build filter: colorkey removes the key color from foreground, then overlay on background
+  const filterComplex = `[0:v]colorkey=${color}:${input.similarity.toFixed(3)}:${input.blend.toFixed(3)}[fg];[1:v][fg]overlay[out]`;
+
+  const inputArgs: string[] = [];
+  if (input.bgIsImage) {
+    inputArgs.push("-loop", "1");
+  }
+
+  await ff.exec([
+    "-i", "ck_video",
+    ...inputArgs,
+    "-i", "ck_bg",
+    "-filter_complex", filterComplex,
+    "-map", "[out]",
+    "-map", "0:a?",
+    "-c:v", "libx264",
+    "-c:a", "copy",
+    "-preset", "ultrafast",
+    "-shortest",
+    "ck_out.mp4"
+  ]);
+
+  const result = await ff.readFile("ck_out.mp4");
+  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+
+  await ff.deleteFile("ck_video");
+  await ff.deleteFile("ck_bg");
+  await ff.deleteFile("ck_out.mp4");
+
+  return blob;
+}
