@@ -1116,8 +1116,9 @@ export default function VideoEditor() {
 
   const handleApplySplit = async () => {
     if (!videoFile || clipMarkers.length === 0 || processing) return;
-    setProcessing(true); await ensureFFmpeg();
+    setProcessing(true);
     try {
+      await ensureFFmpeg();
       const blob = await splitAndReorder(videoFile, clipMarkers, setProgressMsg);
       const newFile = new File([blob], "split.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -1141,8 +1142,9 @@ export default function VideoEditor() {
 
   const handleApplyFiltersExport = async () => {
     if (!videoFile || processing) return;
-    setProcessing(true); await ensureFFmpeg();
+    setProcessing(true);
     try {
+      await ensureFFmpeg();
       const blob = await applyFilters(videoFile, filterSettings, setProgressMsg);
       const newFile = new File([blob], "filtered.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -1169,8 +1171,9 @@ export default function VideoEditor() {
 
   const handleApplyTransitions = async () => {
     if (!videoFile || processing) return;
-    setProcessing(true); await ensureFFmpeg();
+    setProcessing(true);
     try {
+      await ensureFFmpeg();
       const blob = await applyTransitions(videoFile, { transitionInType: transitionIn.type, transitionInDuration: transitionIn.duration, transitionOutType: transitionOut.type, transitionOutDuration: transitionOut.duration, videoDuration: duration }, setProgressMsg);
       const newFile = new File([blob], "transition.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -1249,8 +1252,9 @@ export default function VideoEditor() {
     const layoutOption = COLLAGE_LAYOUT_OPTIONS.find((o) => o.key === layout);
     if (!layoutOption || readyFiles.length < layoutOption.count) { setProgressMsg(`すべてのスロット(${layoutOption?.count}個)に動画をアップロードしてください`); return; }
     if (processing) return;
-    setProcessing(true); await ensureFFmpeg();
+    setProcessing(true);
     try {
+      await ensureFFmpeg();
       const blob = await createCollage({ files: readyFiles, layout, borderWidth, borderColor, outputDuration }, setProgressMsg);
       const newFile = new File([blob], "collage.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -1284,8 +1288,9 @@ export default function VideoEditor() {
   const handleCreateSlideshow = async () => {
     if (slideshowSettings.images.length < 1) { setProgressMsg("1枚以上の画像をアップロードしてください"); return; }
     if (processing) return;
-    setProcessing(true); await ensureFFmpeg();
+    setProcessing(true);
     try {
+      await ensureFFmpeg();
       const blob = await createSlideshow({ images: slideshowSettings.images.map((img) => ({ file: img.file, duration: img.duration })), transition: slideshowSettings.transition, transitionDuration: slideshowSettings.transitionDuration }, setProgressMsg);
       const newFile = new File([blob], "slideshow.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -1303,8 +1308,9 @@ export default function VideoEditor() {
   const handleApplyPip = async () => {
     if (!videoFile || !pipSettings.file) { setProgressMsg("メイン動画とワイプ動画が必要です"); return; }
     if (processing) return;
-    setProcessing(true); await ensureFFmpeg();
+    setProcessing(true);
     try {
+      await ensureFFmpeg();
       const pipEnd = pipSettings.endTime > pipSettings.startTime ? pipSettings.endTime : duration;
       const blob = await applyPip({ mainFile: videoFile, pipFile: pipSettings.file, position: pipSettings.position, size: pipSettings.size, borderWidth: pipSettings.borderWidth, borderColor: pipSettings.borderColor, startTime: pipSettings.startTime, endTime: pipEnd }, setProgressMsg);
       const newFile = new File([blob], "pip.mp4", { type: "video/mp4" });
@@ -1323,8 +1329,9 @@ export default function VideoEditor() {
   const [gifWidth, setGifWidth] = useState(480);
   const handleExportGif = async () => {
     if (!videoFile || processing) return;
-    setProcessing(true); await ensureFFmpeg();
+    setProcessing(true);
     try {
+      await ensureFFmpeg();
       const blob = await exportGif({ file: videoFile, startTime: gifStart, endTime: Math.min(gifEnd, duration), fps: gifFps, width: gifWidth }, setProgressMsg);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = `videoforge_${Date.now()}.gif`; a.click();
@@ -1347,8 +1354,9 @@ export default function VideoEditor() {
 
   const handleApplyMosaic = async () => {
     if (!videoFile || mosaicAreas.length === 0 || processing) return;
-    setProcessing(true); await ensureFFmpeg();
+    setProcessing(true);
     try {
+      await ensureFFmpeg();
       const vw = videoRef.current?.videoWidth || 1280;
       const vh = videoRef.current?.videoHeight || 720;
       const blob = await applyMosaicAreas(videoFile, mosaicAreas, vw, vh, setProgressMsg);
@@ -1374,8 +1382,9 @@ export default function VideoEditor() {
   const handleApplyChromaKey = async () => {
     if (!videoFile || !chromaKey.bgFile) { setProgressMsg("メイン動画と背景ファイルが必要です"); return; }
     if (processing) return;
-    setProcessing(true); await ensureFFmpeg();
+    setProcessing(true);
     try {
+      await ensureFFmpeg();
       const isImage = chromaKey.bgFile.type.startsWith("image/");
       const blob = await applyChromaKey({ videoFile, bgFile: chromaKey.bgFile, bgIsImage: isImage, keyColor: chromaKey.keyColor, similarity: chromaKey.similarity, blend: chromaKey.blend }, setProgressMsg);
       const newFile = new File([blob], "chromakey.mp4", { type: "video/mp4" });
@@ -1406,8 +1415,9 @@ export default function VideoEditor() {
   const handleApplyLogoExport = async () => {
     if (!videoFile || !logoSettings.file) { setProgressMsg("動画とロゴ画像が必要です"); return; }
     if (processing) return;
-    setProcessing(true); await ensureFFmpeg();
+    setProcessing(true);
     try {
+      await ensureFFmpeg();
       const blob = await applyLogo({ videoFile, logoFile: logoSettings.file, position: logoSettings.position, size: logoSettings.size, opacity: logoSettings.opacity, margin: logoSettings.margin }, setProgressMsg);
       const newFile = new File([blob], "logo.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -1989,12 +1999,16 @@ export default function VideoEditor() {
 
   const ensureFFmpeg = useCallback(async () => {
     if (ffmpegLoaded) return;
-    setFfmpegLoading(true); setProgressMsg("FFmpegを読み込み中...");
+    setFfmpegLoading(true);
+    const sabStatus = typeof SharedArrayBuffer !== "undefined" ? "有効" : "無効";
+    const coiStatus = typeof window !== "undefined" && window.crossOriginIsolated ? "有効" : "無効";
+    setProgressMsg(`FFmpegを読み込み中... (SAB:${sabStatus}, COI:${coiStatus})`);
     try {
       const { getFFmpeg } = await import("@/lib/ffmpeg-utils");
       await getFFmpeg(); setFfmpegLoaded(true);
     } catch (e) {
-      setProgressMsg("FFmpegの読み込みに失敗しました。ページを再読み込みしてください。");
+      const errMsg = e instanceof Error ? e.message : String(e);
+      setProgressMsg(`FFmpeg読込失敗 (SAB:${sabStatus}, COI:${coiStatus}): ${errMsg}`);
       setFfmpegLoading(false);
       throw e;
     } finally { setFfmpegLoading(false); }
@@ -2048,18 +2062,20 @@ export default function VideoEditor() {
 
   const handleDetectSilence = async () => {
     if (!videoFile || processing) return;
-    setProcessing(true); await ensureFFmpeg();
+    setProcessing(true);
     try {
+      await ensureFFmpeg();
       const segments = await detectSilence(videoFile, silenceThreshold, silenceMinDuration, setProgressMsg);
       setSilentSegments(segments);
       setProgressMsg(`${segments.length}箇所の無音区間を検出しました`);
-    } catch { setProgressMsg("無音検出に失敗しました"); } finally { setProcessing(false); }
+    } catch (e) { setProgressMsg(`無音検出に失敗: ${e instanceof Error ? e.message : String(e)}`); } finally { setProcessing(false); }
   };
 
   const handleRemoveSilence = async () => {
     if (!videoFile || silentSegments.length === 0 || processing) return;
-    setProcessing(true); await ensureFFmpeg();
+    setProcessing(true);
     try {
+      await ensureFFmpeg();
       const blob = await removeSilence(videoFile, silentSegments, 0.1, setProgressMsg);
       const newFile = new File([blob], "edited.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -2067,13 +2083,14 @@ export default function VideoEditor() {
       setVideoFile(newFile); setSilentSegments([]);
       pushHistory({ textOverlays, subtitles, silentSegments: [], videoUrl: newUrl });
       setProgressMsg("無音カット完了!");
-    } catch { setProgressMsg("無音カットに失敗しました"); } finally { setProcessing(false); }
+    } catch (e) { setProgressMsg(`無音カットに失敗: ${e instanceof Error ? e.message : String(e)}`); } finally { setProcessing(false); }
   };
 
   const handleTrim = async () => {
     if (!videoFile || processing) return;
-    setProcessing(true); await ensureFFmpeg();
+    setProcessing(true);
     try {
+      await ensureFFmpeg();
       const blob = await trimVideo(videoFile, trimStart, trimEnd, setProgressMsg);
       const newFile = new File([blob], "trimmed.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -2208,8 +2225,9 @@ export default function VideoEditor() {
 
   const handleAddBgm = async () => {
     if (!videoFile || !bgmFile || processing) return;
-    setProcessing(true); await ensureFFmpeg();
+    setProcessing(true);
     try {
+      await ensureFFmpeg();
       const blob = await addBgm(videoFile, bgmFile, bgmVolume, setProgressMsg);
       const newFile = new File([blob], "with-bgm.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -2273,8 +2291,9 @@ export default function VideoEditor() {
   const handleExport = async () => {
     if (!videoFile || processing) return;
     const preset = ASPECT_PRESETS[selectedPresetIdx];
-    setProcessing(true); await ensureFFmpeg();
+    setProcessing(true);
     try {
+      await ensureFFmpeg();
       const blob = await exportWithAspectRatio(videoFile, preset.width, preset.height, setProgressMsg);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = `videoforge_${preset.platform}_${Date.now()}.mp4`; a.click();
