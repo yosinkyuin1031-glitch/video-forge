@@ -35,7 +35,8 @@ export async function detectSilence(
   const segments: SilentSegment[] = [];
   let currentStart: number | null = null;
 
-  ff.on("log", ({ message }) => {
+  // Use a named handler so we can remove it after exec completes
+  const logHandler = ({ message }: { message: string }) => {
     // Parse silence_start
     const startMatch = message.match(/silence_start:\s*([\d.]+)/);
     if (startMatch) {
@@ -47,15 +48,22 @@ export async function detectSilence(
       segments.push({ start: currentStart, end: parseFloat(endMatch[1]) });
       currentStart = null;
     }
-  });
+  };
+
+  ff.on("log", logHandler);
 
   onProgress?.("無音区間を検出中...");
 
-  await ff.exec([
-    "-i", "input",
-    "-af", `silencedetect=noise=${threshold}dB:d=${minDuration}`,
-    "-f", "null", "-"
-  ]);
+  try {
+    await ff.exec([
+      "-i", "input",
+      "-af", `silencedetect=noise=${threshold}dB:d=${minDuration}`,
+      "-f", "null", "-"
+    ]);
+  } finally {
+    ff.off("log", logHandler);
+    await ff.deleteFile("input").catch(() => {});
+  }
 
   return segments;
 }
@@ -72,14 +80,19 @@ export async function removeSilence(
 
   // Get video duration
   let duration = 0;
-  ff.on("log", ({ message }) => {
+  const durHandler = ({ message }: { message: string }) => {
     const durMatch = message.match(/Duration:\s*(\d+):(\d+):(\d+)\.(\d+)/);
     if (durMatch) {
       duration = parseInt(durMatch[1]) * 3600 + parseInt(durMatch[2]) * 60 + parseInt(durMatch[3]) + parseInt(durMatch[4]) / 100;
     }
-  });
+  };
 
-  await ff.exec(["-i", "input", "-f", "null", "-"]);
+  ff.on("log", durHandler);
+  try {
+    await ff.exec(["-i", "input", "-f", "null", "-"]);
+  } finally {
+    ff.off("log", durHandler);
+  }
 
   // Build keep segments (non-silent parts)
   const keepSegments: { start: number; end: number }[] = [];
@@ -100,52 +113,53 @@ export async function removeSilence(
   }
 
   if (keepSegments.length === 0) {
+    await ff.deleteFile("input").catch(() => {});
     throw new Error("カット後のコンテンツがありません");
   }
 
   // Create segments
   const partFiles: string[] = [];
-  for (let i = 0; i < keepSegments.length; i++) {
-    const seg = keepSegments[i];
-    const partName = `part${i}.mp4`;
-    onProgress?.(`セグメント ${i + 1}/${keepSegments.length} を処理中...`);
+  try {
+    for (let i = 0; i < keepSegments.length; i++) {
+      const seg = keepSegments[i];
+      const partName = `part${i}.mp4`;
+      onProgress?.(`セグメント ${i + 1}/${keepSegments.length} を処理中...`);
+
+      await ff.exec([
+        "-i", "input",
+        "-ss", seg.start.toFixed(3),
+        "-to", seg.end.toFixed(3),
+        "-c", "copy",
+        "-avoid_negative_ts", "make_zero",
+        partName
+      ]);
+      partFiles.push(partName);
+    }
+
+    // Concat all parts
+    onProgress?.("セグメントを結合中...");
+    const concatList = partFiles.map((f) => `file '${f}'`).join("\n");
+    await ff.writeFile("concat.txt", concatList);
 
     await ff.exec([
-      "-i", "input",
-      "-ss", seg.start.toFixed(3),
-      "-to", seg.end.toFixed(3),
+      "-f", "concat",
+      "-safe", "0",
+      "-i", "concat.txt",
       "-c", "copy",
-      "-avoid_negative_ts", "make_zero",
-      partName
+      "output.mp4"
     ]);
-    partFiles.push(partName);
+
+    const result = await ff.readFile("output.mp4");
+    return new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+  } finally {
+    // Cleanup all temp files
+    for (const f of partFiles) {
+      await ff.deleteFile(f).catch(() => {});
+    }
+    await ff.deleteFile("concat.txt").catch(() => {});
+    await ff.deleteFile("input").catch(() => {});
+    await ff.deleteFile("output.mp4").catch(() => {});
   }
-
-  // Concat all parts
-  onProgress?.("セグメントを結合中...");
-  const concatList = partFiles.map((f) => `file '${f}'`).join("\n");
-  await ff.writeFile("concat.txt", concatList);
-
-  await ff.exec([
-    "-f", "concat",
-    "-safe", "0",
-    "-i", "concat.txt",
-    "-c", "copy",
-    "output.mp4"
-  ]);
-
-  const result = await ff.readFile("output.mp4");
-  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
-
-  // Cleanup
-  for (const f of partFiles) {
-    await ff.deleteFile(f);
-  }
-  await ff.deleteFile("concat.txt");
-  await ff.deleteFile("input");
-  await ff.deleteFile("output.mp4");
-
-  return blob;
 }
 
 export async function trimVideo(
@@ -160,21 +174,21 @@ export async function trimVideo(
 
   onProgress?.("トリミング中...");
 
-  await ff.exec([
-    "-i", "input",
-    "-ss", startTime.toFixed(3),
-    "-to", endTime.toFixed(3),
-    "-c", "copy",
-    "trimmed.mp4"
-  ]);
+  try {
+    await ff.exec([
+      "-i", "input",
+      "-ss", startTime.toFixed(3),
+      "-to", endTime.toFixed(3),
+      "-c", "copy",
+      "trimmed.mp4"
+    ]);
 
-  const result = await ff.readFile("trimmed.mp4");
-  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
-
-  await ff.deleteFile("input");
-  await ff.deleteFile("trimmed.mp4");
-
-  return blob;
+    const result = await ff.readFile("trimmed.mp4");
+    return new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+  } finally {
+    await ff.deleteFile("input").catch(() => {});
+    await ff.deleteFile("trimmed.mp4").catch(() => {});
+  }
 }
 
 export async function addBgm(
@@ -189,26 +203,26 @@ export async function addBgm(
 
   onProgress?.("BGMをミックス中...");
 
-  await ff.exec([
-    "-i", "video",
-    "-i", "bgm",
-    "-filter_complex",
-    `[1:a]volume=${bgmVolume}[bgm];[0:a][bgm]amix=inputs=2:duration=first[out]`,
-    "-map", "0:v",
-    "-map", "[out]",
-    "-c:v", "copy",
-    "-shortest",
-    "output.mp4"
-  ]);
+  try {
+    await ff.exec([
+      "-i", "video",
+      "-i", "bgm",
+      "-filter_complex",
+      `[1:a]volume=${bgmVolume}[bgm];[0:a][bgm]amix=inputs=2:duration=first[out]`,
+      "-map", "0:v",
+      "-map", "[out]",
+      "-c:v", "copy",
+      "-shortest",
+      "output.mp4"
+    ]);
 
-  const result = await ff.readFile("output.mp4");
-  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
-
-  await ff.deleteFile("video");
-  await ff.deleteFile("bgm");
-  await ff.deleteFile("output.mp4");
-
-  return blob;
+    const result = await ff.readFile("output.mp4");
+    return new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+  } finally {
+    await ff.deleteFile("video").catch(() => {});
+    await ff.deleteFile("bgm").catch(() => {});
+    await ff.deleteFile("output.mp4").catch(() => {});
+  }
 }
 
 export async function changeSpeed(
@@ -256,13 +270,13 @@ export async function changeSpeed(
     "speed_output.mp4"
   ]);
 
-  const result = await ff.readFile("speed_output.mp4");
-  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
-
-  await ff.deleteFile("input");
-  await ff.deleteFile("speed_output.mp4");
-
-  return blob;
+  try {
+    const result = await ff.readFile("speed_output.mp4");
+    return new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+  } finally {
+    await ff.deleteFile("input").catch(() => {});
+    await ff.deleteFile("speed_output.mp4").catch(() => {});
+  }
 }
 
 export interface ClipSegment {
@@ -311,17 +325,17 @@ export async function splitAndReorder(
     "clip_output.mp4"
   ]);
 
-  const result = await ff.readFile("clip_output.mp4");
-  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
-
-  for (const f of partFiles) {
-    await ff.deleteFile(f);
+  try {
+    const result = await ff.readFile("clip_output.mp4");
+    return new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+  } finally {
+    for (const f of partFiles) {
+      await ff.deleteFile(f).catch(() => {});
+    }
+    await ff.deleteFile("clip_concat.txt").catch(() => {});
+    await ff.deleteFile("input").catch(() => {});
+    await ff.deleteFile("clip_output.mp4").catch(() => {});
   }
-  await ff.deleteFile("clip_concat.txt");
-  await ff.deleteFile("input");
-  await ff.deleteFile("clip_output.mp4");
-
-  return blob;
 }
 
 export interface FilterOptions {
@@ -381,13 +395,13 @@ export async function applyFilters(
     "filter_output.mp4"
   ]);
 
-  const result = await ff.readFile("filter_output.mp4");
-  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
-
-  await ff.deleteFile("input");
-  await ff.deleteFile("filter_output.mp4");
-
-  return blob;
+  try {
+    const result = await ff.readFile("filter_output.mp4");
+    return new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+  } finally {
+    await ff.deleteFile("input").catch(() => {});
+    await ff.deleteFile("filter_output.mp4").catch(() => {});
+  }
 }
 
 export interface TransitionOptions {
@@ -450,13 +464,13 @@ export async function applyTransitions(
     }
   }
 
-  const result = await ff.readFile("transition_output.mp4");
-  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
-
-  await ff.deleteFile("input");
-  await ff.deleteFile("transition_output.mp4");
-
-  return blob;
+  try {
+    const result = await ff.readFile("transition_output.mp4");
+    return new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+  } finally {
+    await ff.deleteFile("input").catch(() => {});
+    await ff.deleteFile("transition_output.mp4").catch(() => {});
+  }
 }
 
 export interface CollageInput {
@@ -556,16 +570,15 @@ export async function createCollage(
     "collage_out.mp4"
   ]);
 
-  const result = await ff.readFile("collage_out.mp4");
-  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
-
-  // Cleanup
-  for (let i = 0; i < files.length; i++) {
-    await ff.deleteFile(`collage_in${i}`);
+  try {
+    const result = await ff.readFile("collage_out.mp4");
+    return new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+  } finally {
+    for (let i = 0; i < files.length; i++) {
+      await ff.deleteFile(`collage_in${i}`).catch(() => {});
+    }
+    await ff.deleteFile("collage_out.mp4").catch(() => {});
   }
-  await ff.deleteFile("collage_out.mp4");
-
-  return blob;
 }
 
 export interface SlideshowInput {
@@ -638,15 +651,15 @@ export async function createSlideshow(
     "slideshow_out.mp4"
   ]);
 
-  const result = await ff.readFile("slideshow_out.mp4");
-  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
-
-  for (let i = 0; i < images.length; i++) {
-    await ff.deleteFile(`slide_in${i}`);
+  try {
+    const result = await ff.readFile("slideshow_out.mp4");
+    return new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+  } finally {
+    for (let i = 0; i < images.length; i++) {
+      await ff.deleteFile(`slide_in${i}`).catch(() => {});
+    }
+    await ff.deleteFile("slideshow_out.mp4").catch(() => {});
   }
-  await ff.deleteFile("slideshow_out.mp4");
-
-  return blob;
 }
 
 export interface PipInput {
@@ -714,14 +727,14 @@ export async function applyPip(
     "pip_out.mp4"
   ]);
 
-  const result = await ff.readFile("pip_out.mp4");
-  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
-
-  await ff.deleteFile("pip_main");
-  await ff.deleteFile("pip_sub");
-  await ff.deleteFile("pip_out.mp4");
-
-  return blob;
+  try {
+    const result = await ff.readFile("pip_out.mp4");
+    return new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+  } finally {
+    await ff.deleteFile("pip_main").catch(() => {});
+    await ff.deleteFile("pip_sub").catch(() => {});
+    await ff.deleteFile("pip_out.mp4").catch(() => {});
+  }
 }
 
 export interface GifExportInput {
@@ -756,13 +769,13 @@ export async function exportGif(
     "output.gif"
   ]);
 
-  const result = await ff.readFile("output.gif");
-  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "image/gif" });
-
-  await ff.deleteFile("gif_input");
-  await ff.deleteFile("output.gif");
-
-  return blob;
+  try {
+    const result = await ff.readFile("output.gif");
+    return new Blob([new Uint8Array(result as Uint8Array)], { type: "image/gif" });
+  } finally {
+    await ff.deleteFile("gif_input").catch(() => {});
+    await ff.deleteFile("output.gif").catch(() => {});
+  }
 }
 
 export async function exportWithAspectRatio(
@@ -783,13 +796,13 @@ export async function exportWithAspectRatio(
     "output.mp4"
   ]);
 
-  const result = await ff.readFile("output.mp4");
-  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
-
-  await ff.deleteFile("input");
-  await ff.deleteFile("output.mp4");
-
-  return blob;
+  try {
+    const result = await ff.readFile("output.mp4");
+    return new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+  } finally {
+    await ff.deleteFile("input").catch(() => {});
+    await ff.deleteFile("output.mp4").catch(() => {});
+  }
 }
 
 // ===== MOSAIC / BLUR =====
@@ -868,13 +881,13 @@ export async function applyMosaicAreas(
     "mosaic_out.mp4"
   ]);
 
-  const result = await ff.readFile("mosaic_out.mp4");
-  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
-
-  await ff.deleteFile("mosaic_in");
-  await ff.deleteFile("mosaic_out.mp4");
-
-  return blob;
+  try {
+    const result = await ff.readFile("mosaic_out.mp4");
+    return new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+  } finally {
+    await ff.deleteFile("mosaic_in").catch(() => {});
+    await ff.deleteFile("mosaic_out.mp4").catch(() => {});
+  }
 }
 
 // ===== CHROMA KEY =====
@@ -900,11 +913,13 @@ export async function extractAudio(file: File, onProgress?: (msg: string) => voi
     "-ac", "1",
     "audio.wav"
   ]);
-  const result = await ff.readFile("audio.wav");
-  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "audio/wav" });
-  await ff.deleteFile("input");
-  await ff.deleteFile("audio.wav");
-  return blob;
+  try {
+    const result = await ff.readFile("audio.wav");
+    return new Blob([new Uint8Array(result as Uint8Array)], { type: "audio/wav" });
+  } finally {
+    await ff.deleteFile("input").catch(() => {});
+    await ff.deleteFile("audio.wav").catch(() => {});
+  }
 }
 
 export async function applyChromaKey(
@@ -943,14 +958,14 @@ export async function applyChromaKey(
     "ck_out.mp4"
   ]);
 
-  const result = await ff.readFile("ck_out.mp4");
-  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
-
-  await ff.deleteFile("ck_video");
-  await ff.deleteFile("ck_bg");
-  await ff.deleteFile("ck_out.mp4");
-
-  return blob;
+  try {
+    const result = await ff.readFile("ck_out.mp4");
+    return new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+  } finally {
+    await ff.deleteFile("ck_video").catch(() => {});
+    await ff.deleteFile("ck_bg").catch(() => {});
+    await ff.deleteFile("ck_out.mp4").catch(() => {});
+  }
 }
 
 // ===== LOGO / WATERMARK =====
@@ -1011,12 +1026,12 @@ export async function applyLogo(
     "logo_out.mp4"
   ]);
 
-  const result = await ff.readFile("logo_out.mp4");
-  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
-
-  await ff.deleteFile("logo_video");
-  await ff.deleteFile("logo_img");
-  await ff.deleteFile("logo_out.mp4");
-
-  return blob;
+  try {
+    const result = await ff.readFile("logo_out.mp4");
+    return new Blob([new Uint8Array(result as Uint8Array)], { type: "video/mp4" });
+  } finally {
+    await ff.deleteFile("logo_video").catch(() => {});
+    await ff.deleteFile("logo_img").catch(() => {});
+    await ff.deleteFile("logo_out.mp4").catch(() => {});
+  }
 }

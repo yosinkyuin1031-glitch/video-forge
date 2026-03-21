@@ -918,6 +918,9 @@ interface HistoryState {
   videoUrl: string;
 }
 
+// Default filter values - defined outside component to prevent reference instability
+const DEFAULT_FILTERS: FilterSettings = { brightness: 100, contrast: 100, saturation: 100, temperature: 0, vignette: 0 };
+
 export default function VideoEditor() {
   // Video state
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -997,17 +1000,24 @@ export default function VideoEditor() {
   const [history, setHistory] = useState<HistoryState[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const isApplyingHistory = useRef(false);
+  // Ref mirrors historyIndex to avoid stale closures inside setHistory updater
+  const historyIndexRef = useRef(-1);
 
   const pushHistory = useCallback((state: HistoryState) => {
     if (isApplyingHistory.current) return;
     setHistory((prev) => {
-      const newHistory = prev.slice(0, historyIndex + 1);
+      const currentIndex = historyIndexRef.current;
+      const newHistory = prev.slice(0, currentIndex + 1);
       newHistory.push(state);
       if (newHistory.length > 50) newHistory.shift();
       return newHistory;
     });
-    setHistoryIndex((prev) => Math.min(prev + 1, 49));
-  }, [historyIndex]);
+    setHistoryIndex((prev) => {
+      const next = Math.min(prev + 1, 49);
+      historyIndexRef.current = next;
+      return next;
+    });
+  }, []);
 
   const handleUndo = useCallback(() => {
     if (historyIndex <= 0) return;
@@ -1020,6 +1030,7 @@ export default function VideoEditor() {
     setSilentSegments(state.silentSegments);
     if (state.videoUrl !== videoUrl) setVideoUrl(state.videoUrl);
     setHistoryIndex(newIndex);
+    historyIndexRef.current = newIndex;
     isApplyingHistory.current = false;
   }, [history, historyIndex, videoUrl]);
 
@@ -1034,6 +1045,7 @@ export default function VideoEditor() {
     setSilentSegments(state.silentSegments);
     if (state.videoUrl !== videoUrl) setVideoUrl(state.videoUrl);
     setHistoryIndex(newIndex);
+    historyIndexRef.current = newIndex;
     isApplyingHistory.current = false;
   }, [history, historyIndex, videoUrl]);
 
@@ -1058,14 +1070,15 @@ export default function VideoEditor() {
   }, []);
 
   const handleApplySpeed = async () => {
-    if (!videoFile || playbackSpeed === 1) return;
+    if (!videoFile || playbackSpeed === 1 || processing) return;
     await ensureFFmpeg();
     setProcessing(true);
     try {
       const blob = await changeSpeed(videoFile, playbackSpeed, setProgressMsg);
       const newFile = new File([blob], "speed.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
-      setVideoFile(newFile); setVideoUrl(newUrl); setPlaybackSpeed(1);
+      setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
+      setVideoFile(newFile); setPlaybackSpeed(1);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("速度変更完了!");
     } catch { setProgressMsg("速度変更に失敗しました"); }
@@ -1103,13 +1116,14 @@ export default function VideoEditor() {
   const handleResetClips = () => setClipMarkers([]);
 
   const handleApplySplit = async () => {
-    if (!videoFile || clipMarkers.length === 0) return;
+    if (!videoFile || clipMarkers.length === 0 || processing) return;
     await ensureFFmpeg(); setProcessing(true);
     try {
       const blob = await splitAndReorder(videoFile, clipMarkers, setProgressMsg);
       const newFile = new File([blob], "split.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
-      setVideoFile(newFile); setVideoUrl(newUrl); setClipMarkers([]);
+      setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
+      setVideoFile(newFile); setClipMarkers([]);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("分割・並び替え完了!");
     } catch { setProgressMsg("分割処理に失敗しました"); }
@@ -1117,7 +1131,6 @@ export default function VideoEditor() {
   };
 
   // ===== FILTERS =====
-  const DEFAULT_FILTERS: FilterSettings = { brightness: 100, contrast: 100, saturation: 100, temperature: 0, vignette: 0 };
   const [filterSettings, setFilterSettings] = useState<FilterSettings>({ ...DEFAULT_FILTERS });
   const FILTER_PRESETS = [
     { label: "オリジナル", settings: { ...DEFAULT_FILTERS } },
@@ -1129,13 +1142,14 @@ export default function VideoEditor() {
   ];
 
   const handleApplyFiltersExport = async () => {
-    if (!videoFile) return;
+    if (!videoFile || processing) return;
     await ensureFFmpeg(); setProcessing(true);
     try {
       const blob = await applyFilters(videoFile, filterSettings, setProgressMsg);
       const newFile = new File([blob], "filtered.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
-      setVideoFile(newFile); setVideoUrl(newUrl);
+      setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
+      setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("フィルター適用完了!");
     } catch { setProgressMsg("フィルター適用に失敗しました"); }
@@ -1157,13 +1171,14 @@ export default function VideoEditor() {
   ];
 
   const handleApplyTransitions = async () => {
-    if (!videoFile) return;
+    if (!videoFile || processing) return;
     await ensureFFmpeg(); setProcessing(true);
     try {
       const blob = await applyTransitions(videoFile, { transitionInType: transitionIn.type, transitionInDuration: transitionIn.duration, transitionOutType: transitionOut.type, transitionOutDuration: transitionOut.duration, videoDuration: duration }, setProgressMsg);
       const newFile = new File([blob], "transition.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
-      setVideoFile(newFile); setVideoUrl(newUrl);
+      setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
+      setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("トランジション適用完了!");
     } catch { setProgressMsg("トランジション適用に失敗しました"); }
@@ -1218,7 +1233,15 @@ export default function VideoEditor() {
   const collageFileRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const handleCollageLayoutChange = (layout: CollageLayout, count: number) => {
-    setCollageSettings((prev) => ({ ...prev, layout, items: Array.from({ length: count }, (_, i) => prev.items[i] ?? { id: `ci-${Date.now()}-${i}`, file: null, url: "" }) }));
+    setCollageSettings((prev) => {
+      // Revoke URLs for slots that are being removed
+      for (let i = count; i < prev.items.length; i++) {
+        if (prev.items[i].url && prev.items[i].url.startsWith("blob:")) {
+          URL.revokeObjectURL(prev.items[i].url);
+        }
+      }
+      return { ...prev, layout, items: Array.from({ length: count }, (_, i) => prev.items[i] ?? { id: `ci-${Date.now()}-${i}`, file: null, url: "" }) };
+    });
   };
   const handleCollageFileSelect = (index: number, file: File) => {
     const url = URL.createObjectURL(file);
@@ -1229,12 +1252,14 @@ export default function VideoEditor() {
     const readyFiles = items.filter((item) => item.file !== null).map((item) => item.file as File);
     const layoutOption = COLLAGE_LAYOUT_OPTIONS.find((o) => o.key === layout);
     if (!layoutOption || readyFiles.length < layoutOption.count) { setProgressMsg(`すべてのスロット(${layoutOption?.count}個)に動画をアップロードしてください`); return; }
+    if (processing) return;
     await ensureFFmpeg(); setProcessing(true);
     try {
       const blob = await createCollage({ files: readyFiles, layout, borderWidth, borderColor, outputDuration }, setProgressMsg);
       const newFile = new File([blob], "collage.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
-      setVideoFile(newFile); setVideoUrl(newUrl);
+      setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
+      setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("コラージュ作成完了!");
     } catch { setProgressMsg("コラージュ作成に失敗しました"); }
@@ -1255,16 +1280,22 @@ export default function VideoEditor() {
   const handleSlideshowImageMove = (index: number, dir: "up" | "down") => {
     setSlideshowSettings((prev) => { const arr = [...prev.images]; const swapIdx = dir === "up" ? index - 1 : index + 1; if (swapIdx < 0 || swapIdx >= arr.length) return prev; [arr[index], arr[swapIdx]] = [arr[swapIdx], arr[index]]; return { ...prev, images: arr }; });
   };
-  const handleSlideshowImageDelete = (id: string) => setSlideshowSettings((prev) => ({ ...prev, images: prev.images.filter((img) => img.id !== id) }));
+  const handleSlideshowImageDelete = (id: string) => setSlideshowSettings((prev) => {
+    const img = prev.images.find((i) => i.id === id);
+    if (img && img.url.startsWith("blob:")) URL.revokeObjectURL(img.url);
+    return { ...prev, images: prev.images.filter((i) => i.id !== id) };
+  });
   const handleSlideshowImageDuration = (id: string, dur: number) => setSlideshowSettings((prev) => ({ ...prev, images: prev.images.map((img) => img.id === id ? { ...img, duration: dur } : img) }));
   const handleCreateSlideshow = async () => {
     if (slideshowSettings.images.length < 1) { setProgressMsg("1枚以上の画像をアップロードしてください"); return; }
+    if (processing) return;
     await ensureFFmpeg(); setProcessing(true);
     try {
       const blob = await createSlideshow({ images: slideshowSettings.images.map((img) => ({ file: img.file, duration: img.duration })), transition: slideshowSettings.transition, transitionDuration: slideshowSettings.transitionDuration }, setProgressMsg);
       const newFile = new File([blob], "slideshow.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
-      setVideoFile(newFile); setVideoUrl(newUrl);
+      setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
+      setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("スライドショー作成完了!");
     } catch { setProgressMsg("スライドショー作成に失敗しました"); }
@@ -1277,13 +1308,15 @@ export default function VideoEditor() {
   const handlePipFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file) return; setPipSettings((prev) => ({ ...prev, file, url: URL.createObjectURL(file) })); };
   const handleApplyPip = async () => {
     if (!videoFile || !pipSettings.file) { setProgressMsg("メイン動画とワイプ動画が必要です"); return; }
+    if (processing) return;
     await ensureFFmpeg(); setProcessing(true);
     try {
       const pipEnd = pipSettings.endTime > pipSettings.startTime ? pipSettings.endTime : duration;
       const blob = await applyPip({ mainFile: videoFile, pipFile: pipSettings.file, position: pipSettings.position, size: pipSettings.size, borderWidth: pipSettings.borderWidth, borderColor: pipSettings.borderColor, startTime: pipSettings.startTime, endTime: pipEnd }, setProgressMsg);
       const newFile = new File([blob], "pip.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
-      setVideoFile(newFile); setVideoUrl(newUrl);
+      setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
+      setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("ワイプ適用完了!");
     } catch { setProgressMsg("ワイプ適用に失敗しました"); }
@@ -1296,7 +1329,7 @@ export default function VideoEditor() {
   const [gifFps, setGifFps] = useState(15);
   const [gifWidth, setGifWidth] = useState(480);
   const handleExportGif = async () => {
-    if (!videoFile) return;
+    if (!videoFile || processing) return;
     await ensureFFmpeg(); setProcessing(true);
     try {
       const blob = await exportGif({ file: videoFile, startTime: gifStart, endTime: Math.min(gifEnd, duration), fps: gifFps, width: gifWidth }, setProgressMsg);
@@ -1321,7 +1354,7 @@ export default function VideoEditor() {
   const deleteMosaicArea = (id: string) => { setMosaicAreas((prev) => prev.filter((m) => m.id !== id)); if (editingMosaicId === id) setEditingMosaicId(null); };
 
   const handleApplyMosaic = async () => {
-    if (!videoFile || mosaicAreas.length === 0) return;
+    if (!videoFile || mosaicAreas.length === 0 || processing) return;
     await ensureFFmpeg(); setProcessing(true);
     try {
       const vw = videoRef.current?.videoWidth || 1280;
@@ -1329,7 +1362,8 @@ export default function VideoEditor() {
       const blob = await applyMosaicAreas(videoFile, mosaicAreas, vw, vh, setProgressMsg);
       const newFile = new File([blob], "mosaic.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
-      setVideoFile(newFile); setVideoUrl(newUrl);
+      setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
+      setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("モザイク適用完了!");
     } catch { setProgressMsg("モザイク適用に失敗しました"); }
@@ -1348,13 +1382,15 @@ export default function VideoEditor() {
 
   const handleApplyChromaKey = async () => {
     if (!videoFile || !chromaKey.bgFile) { setProgressMsg("メイン動画と背景ファイルが必要です"); return; }
+    if (processing) return;
     await ensureFFmpeg(); setProcessing(true);
     try {
       const isImage = chromaKey.bgFile.type.startsWith("image/");
       const blob = await applyChromaKey({ videoFile, bgFile: chromaKey.bgFile, bgIsImage: isImage, keyColor: chromaKey.keyColor, similarity: chromaKey.similarity, blend: chromaKey.blend }, setProgressMsg);
       const newFile = new File([blob], "chromakey.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
-      setVideoFile(newFile); setVideoUrl(newUrl);
+      setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
+      setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("クロマキー適用完了!");
     } catch { setProgressMsg("クロマキー適用に失敗しました"); }
@@ -1378,12 +1414,14 @@ export default function VideoEditor() {
 
   const handleApplyLogoExport = async () => {
     if (!videoFile || !logoSettings.file) { setProgressMsg("動画とロゴ画像が必要です"); return; }
+    if (processing) return;
     await ensureFFmpeg(); setProcessing(true);
     try {
       const blob = await applyLogo({ videoFile, logoFile: logoSettings.file, position: logoSettings.position, size: logoSettings.size, opacity: logoSettings.opacity, margin: logoSettings.margin }, setProgressMsg);
       const newFile = new File([blob], "logo.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
-      setVideoFile(newFile); setVideoUrl(newUrl);
+      setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
+      setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("ロゴ合成完了!");
     } catch { setProgressMsg("ロゴ合成に失敗しました"); }
@@ -1932,6 +1970,27 @@ export default function VideoEditor() {
 
   const handleCanvasTouchEnd = () => { draggingRef.current = null; setDraggingId(null); };
 
+  // ===== AUTO EDIT STATE =====
+  const [autoTitle, setAutoTitle] = useState("");
+  const [autoGenre, setAutoGenre] = useState<"symptoms" | "treatment" | "patient" | "health" | "clinic" | "other">("symptoms");
+  const [autoPlatform, setAutoPlatform] = useState<"youtube" | "reels">("youtube");
+  const [autoSettings, setAutoSettings] = useState({
+    silenceCut: true,
+    subtitles: true,
+    bgm: true,
+    titleOverlay: true,
+    logo: true,
+    bgmVolume: 0.2,
+  });
+  const [autoStep, setAutoStep] = useState(0);
+  const [autoTotalSteps, setAutoTotalSteps] = useState(6);
+  const [autoRunning, setAutoRunning] = useState(false);
+  const [autoDetailOpen, setAutoDetailOpen] = useState(false);
+  const [autoStepLog, setAutoStepLog] = useState<string[]>([]);
+  const [autoComplete, setAutoComplete] = useState(false);
+  const [autoFinalUrl, setAutoFinalUrl] = useState("");
+  const [autoThumbnailUrl, setAutoThumbnailUrl] = useState("");
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1951,13 +2010,21 @@ export default function VideoEditor() {
   const handleVideoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Revoke old blob URL to prevent memory leak
+    setVideoUrl((prevUrl) => {
+      if (prevUrl && prevUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(prevUrl);
+      }
+      return prevUrl;
+    });
     setVideoFile(file);
     const url = URL.createObjectURL(file);
     setVideoUrl(url);
     setSilentSegments([]); setTextOverlays([]); setSubtitles([]); setClipMarkers([]);
-    setFilterSettings({ ...DEFAULT_FILTERS }); setMosaicAreas([]);
+    setFilterSettings({ brightness: 100, contrast: 100, saturation: 100, temperature: 0, vignette: 0 }); setMosaicAreas([]);
     setHistory([{ textOverlays: [], subtitles: [], silentSegments: [], videoUrl: url }]);
     setHistoryIndex(0);
+    historyIndexRef.current = 0;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLoadedMetadata = useCallback(() => {
@@ -1980,13 +2047,14 @@ export default function VideoEditor() {
   }, []);
 
   const formatTime = (seconds: number) => {
+    if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return "0:00";
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
   const handleDetectSilence = async () => {
-    if (!videoFile) return;
+    if (!videoFile || processing) return;
     await ensureFFmpeg(); setProcessing(true);
     try {
       const segments = await detectSilence(videoFile, silenceThreshold, silenceMinDuration, setProgressMsg);
@@ -1997,13 +2065,14 @@ export default function VideoEditor() {
   };
 
   const handleRemoveSilence = async () => {
-    if (!videoFile || silentSegments.length === 0) return;
+    if (!videoFile || silentSegments.length === 0 || processing) return;
     await ensureFFmpeg(); setProcessing(true);
     try {
       const blob = await removeSilence(videoFile, silentSegments, 0.1, setProgressMsg);
       const newFile = new File([blob], "edited.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
-      setVideoFile(newFile); setVideoUrl(newUrl); setSilentSegments([]);
+      setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
+      setVideoFile(newFile); setSilentSegments([]);
       pushHistory({ textOverlays, subtitles, silentSegments: [], videoUrl: newUrl });
       setProgressMsg("無音カット完了!");
     } catch { setProgressMsg("無音カットに失敗しました"); }
@@ -2011,13 +2080,14 @@ export default function VideoEditor() {
   };
 
   const handleTrim = async () => {
-    if (!videoFile) return;
+    if (!videoFile || processing) return;
     await ensureFFmpeg(); setProcessing(true);
     try {
       const blob = await trimVideo(videoFile, trimStart, trimEnd, setProgressMsg);
       const newFile = new File([blob], "trimmed.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
-      setVideoFile(newFile); setVideoUrl(newUrl);
+      setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
+      setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("トリミング完了!");
     } catch { setProgressMsg("トリミングに失敗しました"); }
@@ -2027,7 +2097,9 @@ export default function VideoEditor() {
   const addTextOverlay = () => {
     const newText: TextOverlay = {
       id: `text-${Date.now()}`, text: "テキストを入力", x: 50, y: 50, fontSize: 32, fontFamily: "sans-serif",
-      color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", startTime: currentTime, endTime: Math.min(currentTime + 5, duration),
+      color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", startTime: currentTime,
+      // If duration is 0 (video not yet loaded), use currentTime + 5 as fallback
+      endTime: duration > 0 ? Math.min(currentTime + 5, duration) : currentTime + 5,
       bold: true, italic: false, outlineColor: "#000000", outlineWidth: 0,
       shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 0, shadowOffsetX: 2, shadowOffsetY: 2, animation: "none",
       keyframes: [],
@@ -2092,7 +2164,7 @@ export default function VideoEditor() {
   };
 
   const handleWhisperSubtitles = async () => {
-    if (!videoFile || !whisperApiKey) return;
+    if (!videoFile || !whisperApiKey || processing) return;
     await ensureFFmpeg();
     setProcessing(true);
     try {
@@ -2145,22 +2217,33 @@ export default function VideoEditor() {
   };
 
   const handleAddBgm = async () => {
-    if (!videoFile || !bgmFile) return;
+    if (!videoFile || !bgmFile || processing) return;
     await ensureFFmpeg(); setProcessing(true);
     try {
       const blob = await addBgm(videoFile, bgmFile, bgmVolume, setProgressMsg);
       const newFile = new File([blob], "with-bgm.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
-      setVideoFile(newFile); setVideoUrl(newUrl);
+      setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
+      setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
       setProgressMsg("BGM追加完了!");
     } catch { setProgressMsg("BGM追加に失敗しました"); }
     setProcessing(false);
   };
 
+  const bgmLibraryUrlRef = useRef<string | null>(null);
+
   const handlePreviewBgmLibrary = async (catIdx: number, itemIdx: number) => {
     const key = `${catIdx}-${itemIdx}`;
-    if (bgmLibraryAudio) { bgmLibraryAudio.pause(); bgmLibraryAudio.src = ""; }
+    if (bgmLibraryAudio) {
+      bgmLibraryAudio.pause();
+      bgmLibraryAudio.src = "";
+      // Revoke the previous blob URL to prevent memory leak
+      if (bgmLibraryUrlRef.current) {
+        URL.revokeObjectURL(bgmLibraryUrlRef.current);
+        bgmLibraryUrlRef.current = null;
+      }
+    }
     if (previewingBgmIdx === key) { setPreviewingBgmIdx(null); setBgmLibraryAudio(null); return; }
     setGeneratingBgm(key);
     try {
@@ -2168,12 +2251,19 @@ export default function VideoEditor() {
       const isBgm = catIdx === 0;
       const blob = await generateAudioBlob(item.key);
       const url = URL.createObjectURL(blob);
+      bgmLibraryUrlRef.current = url;
       const audio = new Audio(url);
       audio.loop = isBgm;
       audio.play();
       setBgmLibraryAudio(audio);
       setPreviewingBgmIdx(key);
-      audio.onended = () => setPreviewingBgmIdx(null);
+      audio.onended = () => {
+        setPreviewingBgmIdx(null);
+        if (bgmLibraryUrlRef.current) {
+          URL.revokeObjectURL(bgmLibraryUrlRef.current);
+          bgmLibraryUrlRef.current = null;
+        }
+      };
     } catch {}
     setGeneratingBgm(null);
   };
@@ -2192,7 +2282,7 @@ export default function VideoEditor() {
   };
 
   const handleExport = async () => {
-    if (!videoFile) return;
+    if (!videoFile || processing) return;
     const preset = ASPECT_PRESETS[selectedPresetIdx];
     await ensureFFmpeg(); setProcessing(true);
     try {
@@ -2223,13 +2313,21 @@ export default function VideoEditor() {
     if (!ctx) return;
 
     const drawFrame = () => {
-      const video = videoRef.current!;
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 360;
+      const video = videoRef.current;
+      if (!video) return;
+      // Guard: only draw if video has valid dimensions and metadata is loaded
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      if (vw > 0 && vh > 0) {
+        // Only resize canvas if dimensions changed (avoids clearing canvas unnecessarily)
+        if (canvas.width !== vw || canvas.height !== vh) {
+          canvas.width = vw;
+          canvas.height = vh;
+        }
 
-      ctx.filter = getCanvasFilter();
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      ctx.filter = "none";
+        ctx.filter = getCanvasFilter();
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.filter = "none";
 
       if (filterSettings.temperature !== 0) {
         const tempNorm = filterSettings.temperature / 100;
@@ -2533,12 +2631,14 @@ export default function VideoEditor() {
         ctx.restore();
       }
 
+      } // end if (vw > 0 && vh > 0)
+
       requestAnimationFrame(drawFrame);
     };
 
     const animId = requestAnimationFrame(drawFrame);
     return () => cancelAnimationFrame(animId);
-  }, [textOverlays, subtitles, filterSettings, getCanvasFilter, stickers, mosaicAreas, editingMosaicId, draggingId, logoSettings]);
+  }, [textOverlays, subtitles, filterSettings, getCanvasFilter, stickers, mosaicAreas, editingMosaicId, draggingId, logoSettings, videoUrl]);
 
   const showCanvas =
     textOverlays.length > 0 || subtitles.length > 0 || stickers.length > 0 ||
@@ -2546,7 +2646,301 @@ export default function VideoEditor() {
     filterSettings.brightness !== 100 || filterSettings.contrast !== 100 ||
     filterSettings.saturation !== 100 || filterSettings.temperature !== 0 || filterSettings.vignette !== 0;
 
+  // ===== AUTO EDIT =====
+  const generateAutoThumbnail = useCallback((title: string): string => {
+    try {
+      const c = document.createElement("canvas");
+      c.width = 1280; c.height = 720;
+      const ctx = c.getContext("2d");
+      if (!ctx) return "";
+      // Background gradient
+      const grad = ctx.createLinearGradient(0, 0, 1280, 720);
+      grad.addColorStop(0, "#1e1b4b");
+      grad.addColorStop(1, "#312e81");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 1280, 720);
+      // Draw video frame if available
+      if (videoRef.current && videoRef.current.readyState >= 2) {
+        ctx.globalAlpha = 0.4;
+        ctx.drawImage(videoRef.current, 0, 0, 1280, 720);
+        ctx.globalAlpha = 1;
+      }
+      // Dark overlay
+      const overlay = ctx.createLinearGradient(0, 400, 0, 720);
+      overlay.addColorStop(0, "rgba(0,0,0,0)");
+      overlay.addColorStop(1, "rgba(0,0,0,0.85)");
+      ctx.fillStyle = overlay;
+      ctx.fillRect(0, 0, 1280, 720);
+      // Title text
+      if (title) {
+        ctx.font = "bold 72px sans-serif";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.shadowColor = "rgba(0,0,0,0.9)";
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetX = 3;
+        ctx.shadowOffsetY = 3;
+        // Wrap text
+        const words = title.split("");
+        const maxWidth = 1100;
+        const lineHeight = 90;
+        let line = "";
+        const lines: string[] = [];
+        for (const ch of words) {
+          const test = line + ch;
+          if (ctx.measureText(test).width > maxWidth && line.length > 0) {
+            lines.push(line); line = ch;
+          } else { line = test; }
+        }
+        if (line) lines.push(line);
+        const startY = 720 / 2 - ((lines.length - 1) * lineHeight) / 2;
+        lines.forEach((l, i) => ctx.fillText(l, 640, startY + i * lineHeight));
+      }
+      return c.toDataURL("image/jpeg", 0.9);
+    } catch { return ""; }
+  }, [videoRef]);
+
+  const handleAutoEdit = async () => {
+    if (!videoFile || autoRunning) return;
+    setAutoRunning(true);
+    setProcessing(true);
+    setAutoComplete(false);
+    setAutoFinalUrl("");
+    setAutoThumbnailUrl("");
+    setAutoStepLog([]);
+
+    let currentFile = videoFile;
+    const steps: string[] = [];
+    let stepNum = 0;
+    const totalSteps = [
+      autoSettings.silenceCut,
+      autoSettings.subtitles,
+      autoSettings.titleOverlay && !!autoTitle,
+      autoSettings.bgm,
+      true, // export always
+      true, // thumbnail always
+    ].filter(Boolean).length;
+    setAutoTotalSteps(totalSteps);
+    setAutoStep(0);
+
+    const logStep = (msg: string) => setAutoStepLog((prev) => [...prev, msg]);
+
+    try {
+      await ensureFFmpeg();
+
+      // Step 1: Silence Cut
+      if (autoSettings.silenceCut) {
+        stepNum++;
+        setAutoStep(stepNum);
+        setProgressMsg(`Step ${stepNum}/${totalSteps}: 無音区間を検出中...`);
+        const { detectSilence: ds, removeSilence: rs } = await import("@/lib/ffmpeg-utils");
+        const segments = await ds(currentFile, -35, 0.5, setProgressMsg);
+        if (segments.length > 0) {
+          setProgressMsg(`Step ${stepNum}/${totalSteps}: ${segments.length}箇所の無音をカット中...`);
+          const blob = await rs(currentFile, segments, 0.1, setProgressMsg);
+          currentFile = new File([blob], "auto_edited.mp4", { type: "video/mp4" });
+        }
+        steps.push(`無音カット: ${segments.length}箇所削除`);
+        logStep(`無音カット: ${segments.length}箇所削除`);
+      }
+
+      // Step 2: Subtitles
+      if (autoSettings.subtitles) {
+        stepNum++;
+        setAutoStep(stepNum);
+        setProgressMsg(`Step ${stepNum}/${totalSteps}: 字幕を生成中...`);
+        const apiKey = (() => { try { return localStorage.getItem("videoforge_whisper_key") || ""; } catch { return ""; } })();
+        if (apiKey) {
+          try {
+            const { extractAudio: ea } = await import("@/lib/ffmpeg-utils");
+            const audioBlob = await ea(currentFile, setProgressMsg);
+            const formData = new FormData();
+            formData.append("file", audioBlob, "audio.wav");
+            formData.append("model", "whisper-1");
+            formData.append("language", "ja");
+            formData.append("response_format", "verbose_json");
+            formData.append("timestamp_granularities[]", "segment");
+            const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${apiKey}` },
+              body: formData,
+            });
+            if (response.ok) {
+              const data = await response.json();
+              const newSubs = (data.segments || []).map((seg: { text: string; start: number; end: number }, i: number) => ({
+                id: `auto-sub-${Date.now()}-${i}`,
+                text: seg.text.trim(),
+                startTime: seg.start,
+                endTime: seg.end,
+              }));
+              setSubtitles(newSubs);
+              steps.push(`字幕生成(AI): ${newSubs.length}件`);
+              logStep(`字幕生成(AI): ${newSubs.length}件`);
+            } else {
+              steps.push("字幕生成: APIエラー");
+              logStep("字幕生成: APIエラー");
+            }
+          } catch {
+            steps.push("字幕生成: エラー");
+            logStep("字幕生成: エラー");
+          }
+        } else {
+          steps.push("字幕生成: APIキー未設定のためスキップ");
+          logStep("字幕生成: APIキー未設定のためスキップ");
+        }
+      }
+
+      // Step 3: Title Overlay
+      if (autoSettings.titleOverlay && autoTitle) {
+        stepNum++;
+        setAutoStep(stepNum);
+        setProgressMsg(`Step ${stepNum}/${totalSteps}: テロップを配置中...`);
+        const isReels = autoPlatform === "reels";
+        const titleOverlay: TextOverlay = {
+          id: `auto-title-${Date.now()}`,
+          text: autoTitle,
+          x: 50,
+          y: isReels ? 35 : 15,
+          fontSize: isReels ? 34 : 42,
+          fontFamily: "sans-serif",
+          color: "#ffffff",
+          bgColor: "transparent",
+          startTime: 0,
+          endTime: 5,
+          bold: true,
+          italic: false,
+          outlineColor: "#000000",
+          outlineWidth: 4,
+          shadowColor: "rgba(0,0,0,0.8)",
+          shadowBlur: 8,
+          shadowOffsetX: 2,
+          shadowOffsetY: 2,
+          animation: "zoom-in",
+          keyframes: [],
+        };
+        setTextOverlays((prev) => [titleOverlay, ...prev]);
+        steps.push(`テロップ配置: "${autoTitle}"`);
+        logStep(`テロップ配置: "${autoTitle}"`);
+      }
+
+      // Step 4: BGM
+      if (autoSettings.bgm) {
+        stepNum++;
+        setAutoStep(stepNum);
+        setProgressMsg(`Step ${stepNum}/${totalSteps}: BGMを追加中...`);
+        try {
+          const sampleRate = 44100;
+          const bgmDuration = 10;
+          const offlineCtx = new OfflineAudioContext(2, sampleRate * bgmDuration, sampleRate);
+          const chords = [
+            [261.63, 329.63, 392.00],
+            [293.66, 349.23, 440.00],
+            [349.23, 440.00, 523.25],
+            [392.00, 493.88, 587.33],
+          ];
+          const masterGain = offlineCtx.createGain();
+          masterGain.gain.value = 0.08;
+          masterGain.connect(offlineCtx.destination);
+          chords.forEach((chord, ci) => {
+            chord.forEach((freq) => {
+              const osc = offlineCtx.createOscillator();
+              osc.type = "sine";
+              osc.frequency.value = freq;
+              const gain = offlineCtx.createGain();
+              const startTime = ci * (bgmDuration / chords.length);
+              const endTime = (ci + 1) * (bgmDuration / chords.length);
+              gain.gain.setValueAtTime(0, startTime);
+              gain.gain.linearRampToValueAtTime(0.3, startTime + 0.1);
+              gain.gain.linearRampToValueAtTime(0, endTime);
+              osc.connect(gain);
+              gain.connect(masterGain);
+              osc.start(startTime);
+              osc.stop(endTime);
+            });
+          });
+          const buffer = await offlineCtx.startRendering();
+          const numChannels = buffer.numberOfChannels;
+          const length = buffer.length * numChannels * 2;
+          const arrayBuffer = new ArrayBuffer(44 + length);
+          const view = new DataView(arrayBuffer);
+          const writeString = (offset: number, str: string) => {
+            for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+          };
+          writeString(0, "RIFF");
+          view.setUint32(4, 36 + length, true);
+          writeString(8, "WAVE");
+          writeString(12, "fmt ");
+          view.setUint32(16, 16, true);
+          view.setUint16(20, 1, true);
+          view.setUint16(22, numChannels, true);
+          view.setUint32(24, sampleRate, true);
+          view.setUint32(28, sampleRate * numChannels * 2, true);
+          view.setUint16(32, numChannels * 2, true);
+          view.setUint16(34, 16, true);
+          writeString(36, "data");
+          view.setUint32(40, length, true);
+          let offset = 44;
+          for (let i = 0; i < buffer.length; i++) {
+            for (let ch = 0; ch < numChannels; ch++) {
+              const sample = Math.max(-1, Math.min(1, buffer.getChannelData(ch)[i]));
+              view.setInt16(offset, sample * 0x7fff, true);
+              offset += 2;
+            }
+          }
+          const bgmBlob = new Blob([arrayBuffer], { type: "audio/wav" });
+          const bgmFileObj = new File([bgmBlob], "auto_bgm.wav", { type: "audio/wav" });
+          const { addBgm: ab } = await import("@/lib/ffmpeg-utils");
+          const withBgm = await ab(currentFile, bgmFileObj, autoSettings.bgmVolume, setProgressMsg);
+          currentFile = new File([withBgm], "auto_bgm.mp4", { type: "video/mp4" });
+          steps.push("BGM追加: 完了");
+          logStep("BGM追加: 完了");
+        } catch {
+          steps.push("BGM追加: スキップ（エラー）");
+          logStep("BGM追加: スキップ（エラー）");
+        }
+      }
+
+      // Step 5: Export
+      stepNum++;
+      setAutoStep(stepNum);
+      setProgressMsg(`Step ${stepNum}/${totalSteps}: 書き出し中...`);
+      if (autoPlatform === "reels") {
+        const { exportWithAspectRatio: ear } = await import("@/lib/ffmpeg-utils");
+        const exported = await ear(currentFile, 1080, 1920, setProgressMsg);
+        currentFile = new File([exported], "auto_final.mp4", { type: "video/mp4" });
+      }
+      const finalUrl = URL.createObjectURL(currentFile);
+      setVideoFile(currentFile);
+      setVideoUrl(finalUrl);
+      setAutoFinalUrl(finalUrl);
+      steps.push("書き出し: 完了");
+      logStep("書き出し: 完了");
+
+      // Step 6: Thumbnail
+      stepNum++;
+      setAutoStep(stepNum);
+      setProgressMsg(`Step ${stepNum}/${totalSteps}: サムネイルを生成中...`);
+      // Wait a tick for video to load then generate thumbnail
+      await new Promise((r) => setTimeout(r, 500));
+      const thumbUrl = generateAutoThumbnail(autoTitle);
+      setAutoThumbnailUrl(thumbUrl);
+      steps.push("サムネイル: 生成完了");
+      logStep("サムネイル: 生成完了");
+
+      setProgressMsg(`全自動編集完了！ ${steps.join(" / ")}`);
+      setAutoStep(totalSteps + 1);
+      setAutoComplete(true);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "処理に失敗しました";
+      setProgressMsg(`エラー: ${msg}`);
+    }
+
+    setAutoRunning(false);
+    setProcessing(false);
+  };
+
   const TOOLS: { key: EditorTool; label: string; icon: string }[] = [
+    { key: "auto", label: "全自動編集", icon: "🚀" },
     { key: "template", label: "テンプレート", icon: "📋" },
     { key: "script", label: "AI台本", icon: "📝" },
     { key: "silence", label: "無音カット", icon: "✂️" },
@@ -2692,6 +3086,207 @@ export default function VideoEditor() {
 
       {/* Tool Panel */}
       <div className="flex-1 overflow-y-auto p-4 bg-gray-950">
+        {/* Auto Edit */}
+        {activeTool === "auto" && (
+          <div className="space-y-4">
+            {/* Header */}
+            <div className="text-center pb-2 border-b border-gray-800">
+              <div className="text-3xl mb-1">🚀</div>
+              <h3 className="text-base font-bold text-white">ワンクリック全自動編集</h3>
+              <p className="text-xs text-gray-400 mt-1">動画をアップロードするだけ。あとはAIが自動で編集します。</p>
+            </div>
+
+            {/* Title Input */}
+            <div>
+              <label className="block text-xs font-medium text-gray-300 mb-1">動画のタイトル</label>
+              <input
+                type="text"
+                value={autoTitle}
+                onChange={(e) => setAutoTitle(e.target.value)}
+                placeholder="例: 腰痛改善ストレッチ3選"
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+                disabled={autoRunning}
+              />
+            </div>
+
+            {/* Genre Selection */}
+            <div>
+              <label className="block text-xs font-medium text-gray-300 mb-2">ジャンル</label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {([
+                  { value: "symptoms", label: "症状解説" },
+                  { value: "treatment", label: "施術紹介" },
+                  { value: "patient", label: "患者の声" },
+                  { value: "health", label: "健康情報" },
+                  { value: "clinic", label: "院紹介" },
+                  { value: "other", label: "その他" },
+                ] as { value: "symptoms" | "treatment" | "patient" | "health" | "clinic" | "other"; label: string }[]).map(({ value, label }) => (
+                  <button
+                    key={value}
+                    onClick={() => setAutoGenre(value)}
+                    disabled={autoRunning}
+                    className={`py-2 rounded-lg text-xs font-medium transition-all ${autoGenre === value ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"} disabled:opacity-50`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Platform */}
+            <div>
+              <label className="block text-xs font-medium text-gray-300 mb-2">プラットフォーム</label>
+              <div className="flex gap-2">
+                {([
+                  { value: "youtube", label: "🎬 YouTube" },
+                  { value: "reels", label: "📱 Reels" },
+                ] as { value: "youtube" | "reels"; label: string }[]).map(({ value, label }) => (
+                  <button
+                    key={value}
+                    onClick={() => setAutoPlatform(value)}
+                    disabled={autoRunning}
+                    className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all ${autoPlatform === value ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"} disabled:opacity-50`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Detail Settings (collapsible) */}
+            <div className="border border-gray-700 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setAutoDetailOpen((v) => !v)}
+                className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-800 text-xs text-gray-300 hover:bg-gray-700 transition-colors"
+              >
+                <span className="font-medium">🔧 詳細設定</span>
+                <span className="text-gray-500">{autoDetailOpen ? "▲" : "▼"}</span>
+              </button>
+              {autoDetailOpen && (
+                <div className="px-3 py-3 space-y-3 bg-gray-900">
+                  {([
+                    { key: "silenceCut", label: "無音カット" },
+                    { key: "subtitles", label: "自動字幕" },
+                    { key: "bgm", label: "BGM追加" },
+                    { key: "titleOverlay", label: "テロップ" },
+                    { key: "logo", label: "ロゴ挿入" },
+                  ] as { key: keyof typeof autoSettings; label: string }[]).filter((item) => item.key !== "bgmVolume").map(({ key, label }) => (
+                    <div key={key} className="flex items-center justify-between">
+                      <span className="text-xs text-gray-300">{label}</span>
+                      <button
+                        onClick={() => setAutoSettings((prev) => ({ ...prev, [key]: !(prev[key] as boolean) }))}
+                        className={`relative w-10 h-5 rounded-full transition-colors ${(autoSettings[key] as boolean) ? "bg-indigo-600" : "bg-gray-600"}`}
+                      >
+                        <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${(autoSettings[key] as boolean) ? "translate-x-5" : "translate-x-0.5"}`} />
+                      </button>
+                    </div>
+                  ))}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-gray-300">BGM音量</span>
+                      <span className="text-xs text-gray-400">{Math.round(autoSettings.bgmVolume * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={autoSettings.bgmVolume}
+                      onChange={(e) => setAutoSettings((prev) => ({ ...prev, bgmVolume: parseFloat(e.target.value) }))}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Start Button */}
+            <button
+              onClick={handleAutoEdit}
+              disabled={!videoFile || autoRunning || processing}
+              className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl text-base font-bold hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-900/30"
+            >
+              {autoRunning ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  処理中...
+                </span>
+              ) : (
+                "🚀 全自動編集スタート"
+              )}
+            </button>
+
+            {/* Progress */}
+            {(autoRunning || autoComplete) && (
+              <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 space-y-2">
+                <p className="text-xs font-bold text-gray-200 mb-3">進捗</p>
+                {(() => {
+                  const stepNames: string[] = [];
+                  if (autoSettings.silenceCut) stepNames.push("無音カット");
+                  if (autoSettings.subtitles) stepNames.push("字幕生成");
+                  if (autoSettings.titleOverlay && autoTitle) stepNames.push("テロップ配置");
+                  if (autoSettings.bgm) stepNames.push("BGM追加");
+                  stepNames.push("書き出し");
+                  stepNames.push("サムネイル");
+
+                  return stepNames.map((name, i) => {
+                    const stepIdx = i + 1;
+                    const isDone = autoComplete ? true : autoStep > stepIdx;
+                    const isCurrent = !autoComplete && autoStep === stepIdx;
+                    const isPending = !isDone && !isCurrent;
+                    return (
+                      <div key={name} className="flex items-center gap-2">
+                        <span className="text-base w-6 text-center flex-shrink-0">
+                          {isDone ? "✅" : isCurrent ? (
+                            <span className="inline-block w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin align-middle" />
+                          ) : "⬜"}
+                        </span>
+                        <span className={`text-xs ${isDone ? "text-green-400" : isCurrent ? "text-indigo-300 font-medium" : "text-gray-500"}`}>
+                          Step {stepIdx}/{autoTotalSteps}: {name}
+                        </span>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            )}
+
+            {/* Completion Summary */}
+            {autoComplete && autoStepLog.length > 0 && (
+              <div className="bg-green-900/30 border border-green-700 rounded-xl p-3 space-y-1">
+                <p className="text-xs font-bold text-green-400 mb-2">全自動編集完了！</p>
+                {autoStepLog.map((log, i) => (
+                  <p key={i} className="text-xs text-green-300">✅ {log}</p>
+                ))}
+              </div>
+            )}
+
+            {/* Download Buttons */}
+            {autoComplete && (
+              <div className="space-y-2">
+                {autoFinalUrl && (
+                  <a
+                    href={autoFinalUrl}
+                    download={`auto_edited_${autoTitle || "video"}.mp4`}
+                    className="block w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold text-center hover:bg-indigo-500 transition-colors"
+                  >
+                    💾 動画をダウンロード
+                  </a>
+                )}
+                {autoThumbnailUrl && (
+                  <a
+                    href={autoThumbnailUrl}
+                    download={`thumbnail_${autoTitle || "thumb"}.jpg`}
+                    className="block w-full py-3 bg-gray-700 text-white rounded-xl text-sm font-bold text-center hover:bg-gray-600 transition-colors"
+                  >
+                    🖼 サムネイルをダウンロード
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Template */}
         {activeTool === "template" && (
           <div className="space-y-4">
