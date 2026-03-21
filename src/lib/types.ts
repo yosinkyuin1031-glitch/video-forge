@@ -11,7 +11,24 @@ export interface TextOverlay {
   endTime: number;
   bold: boolean;
   italic: boolean;
+  outlineColor: string;
+  outlineWidth: number;
+  shadowColor: string;
+  shadowBlur: number;
+  shadowOffsetX: number;
+  shadowOffsetY: number;
 }
+
+export const FONT_OPTIONS = [
+  { value: "sans-serif", label: "ゴシック" },
+  { value: "serif", label: "明朝体" },
+  { value: "'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif", label: "ヒラギノ角ゴ" },
+  { value: "'Hiragino Mincho ProN', 'Noto Serif JP', serif", label: "ヒラギノ明朝" },
+  { value: "'Arial Black', 'Impact', sans-serif", label: "インパクト" },
+  { value: "'Courier New', monospace", label: "等幅" },
+  { value: "'Comic Sans MS', 'Chalkboard SE', cursive", label: "手書き風" },
+  { value: "'Georgia', 'Times New Roman', serif", label: "エレガント" },
+] as const;
 
 export interface SubtitleEntry {
   id: string;

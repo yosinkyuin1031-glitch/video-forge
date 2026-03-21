@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { TextOverlay, SubtitleEntry, EditorTool, ASPECT_PRESETS } from "@/lib/types";
+import { TextOverlay, SubtitleEntry, EditorTool, ASPECT_PRESETS, FONT_OPTIONS } from "@/lib/types";
 import { detectSilence, removeSilence, trimVideo, addBgm, exportWithAspectRatio, SilentSegment } from "@/lib/ffmpeg-utils";
 
 export default function VideoEditor() {
@@ -176,7 +176,7 @@ export default function VideoEditor() {
       text: "テキストを入力",
       x: 50,
       y: 50,
-      fontSize: 24,
+      fontSize: 32,
       fontFamily: "sans-serif",
       color: "#ffffff",
       bgColor: "rgba(0,0,0,0.7)",
@@ -184,6 +184,12 @@ export default function VideoEditor() {
       endTime: Math.min(currentTime + 5, duration),
       bold: true,
       italic: false,
+      outlineColor: "#000000",
+      outlineWidth: 0,
+      shadowColor: "rgba(0,0,0,0.8)",
+      shadowBlur: 0,
+      shadowOffsetX: 2,
+      shadowOffsetY: 2,
     };
     setTextOverlays((prev) => [...prev, newText]);
     setEditingTextId(newText.id);
@@ -334,14 +340,51 @@ export default function VideoEditor() {
           const px = (overlay.x / 100) * canvas.width;
           const py = (overlay.y / 100) * canvas.height;
 
+          // Shadow
+          if (overlay.shadowBlur > 0) {
+            ctx.shadowColor = overlay.shadowColor;
+            ctx.shadowBlur = overlay.shadowBlur;
+            ctx.shadowOffsetX = overlay.shadowOffsetX;
+            ctx.shadowOffsetY = overlay.shadowOffsetY;
+          }
+
           // Background
-          if (overlay.bgColor) {
+          if (overlay.bgColor && overlay.bgColor !== "transparent") {
             ctx.fillStyle = overlay.bgColor;
             ctx.fillRect(px - 8, py - textHeight + 4, metrics.width + 16, textHeight + 8);
           }
 
+          // Reset shadow for text (apply separately)
+          ctx.shadowColor = "transparent";
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
+
+          // Re-apply shadow for text
+          if (overlay.shadowBlur > 0) {
+            ctx.shadowColor = overlay.shadowColor;
+            ctx.shadowBlur = overlay.shadowBlur;
+            ctx.shadowOffsetX = overlay.shadowOffsetX;
+            ctx.shadowOffsetY = overlay.shadowOffsetY;
+          }
+
+          // Outline (stroke)
+          if (overlay.outlineWidth > 0) {
+            ctx.strokeStyle = overlay.outlineColor;
+            ctx.lineWidth = overlay.outlineWidth;
+            ctx.lineJoin = "round";
+            ctx.strokeText(overlay.text, px, py);
+          }
+
+          // Fill text
           ctx.fillStyle = overlay.color;
           ctx.fillText(overlay.text, px, py);
+
+          // Reset shadow
+          ctx.shadowColor = "transparent";
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
         }
       }
 
@@ -722,38 +765,159 @@ export default function VideoEditor() {
                 </div>
 
                 {editingTextId === overlay.id && (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
+                    {/* テキスト入力 */}
                     <input
                       type="text"
                       value={overlay.text}
                       onChange={(e) => updateTextOverlay(overlay.id, { text: e.target.value })}
                       className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white"
+                      placeholder="テキストを入力..."
                     />
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-gray-500">サイズ</label>
+
+                    {/* フォント選択 */}
+                    <div>
+                      <label className="text-[10px] text-gray-500 block mb-1">フォント</label>
+                      <select
+                        value={overlay.fontFamily}
+                        onChange={(e) => updateTextOverlay(overlay.id, { fontFamily: e.target.value })}
+                        className="w-full px-2 py-2 bg-gray-900 border border-gray-700 rounded-lg text-xs text-white"
+                      >
+                        {FONT_OPTIONS.map((f) => (
+                          <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+                            {f.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* サイズ + 太字/斜体 */}
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <label className="text-[10px] text-gray-500 block mb-1">サイズ ({overlay.fontSize}px)</label>
                         <input
                           type="range"
                           min={12}
-                          max={72}
+                          max={120}
                           value={overlay.fontSize}
                           onChange={(e) => updateTextOverlay(overlay.id, { fontSize: parseInt(e.target.value) })}
                           className="w-full"
                         />
                       </div>
+                      <button
+                        onClick={() => updateTextOverlay(overlay.id, { bold: !overlay.bold })}
+                        className={`w-9 h-9 rounded-lg text-sm font-bold flex items-center justify-center transition-colors ${
+                          overlay.bold ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                        }`}
+                      >
+                        B
+                      </button>
+                      <button
+                        onClick={() => updateTextOverlay(overlay.id, { italic: !overlay.italic })}
+                        className={`w-9 h-9 rounded-lg text-sm italic font-serif flex items-center justify-center transition-colors ${
+                          overlay.italic ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                        }`}
+                      >
+                        I
+                      </button>
+                    </div>
+
+                    {/* 文字色 + 背景色 */}
+                    <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="text-[10px] text-gray-500">文字色</label>
+                        <label className="text-[10px] text-gray-500 block mb-1">文字色</label>
+                        <div className="flex gap-1">
+                          <input
+                            type="color"
+                            value={overlay.color}
+                            onChange={(e) => updateTextOverlay(overlay.id, { color: e.target.value })}
+                            className="w-10 h-8 rounded cursor-pointer border border-gray-700"
+                          />
+                          {["#ffffff", "#000000", "#ff0000", "#ffff00", "#00ff00", "#00bfff"].map((c) => (
+                            <button
+                              key={c}
+                              onClick={() => updateTextOverlay(overlay.id, { color: c })}
+                              className={`w-6 h-8 rounded border ${overlay.color === c ? "border-indigo-400 ring-1 ring-indigo-400" : "border-gray-600"}`}
+                              style={{ backgroundColor: c }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-500 block mb-1">背景色</label>
+                        <div className="flex gap-1">
+                          <input
+                            type="color"
+                            value={overlay.bgColor.startsWith("rgba") ? "#000000" : overlay.bgColor}
+                            onChange={(e) => updateTextOverlay(overlay.id, { bgColor: e.target.value + "cc" })}
+                            className="w-10 h-8 rounded cursor-pointer border border-gray-700"
+                          />
+                          <button
+                            onClick={() => updateTextOverlay(overlay.id, { bgColor: "transparent" })}
+                            className={`px-2 h-8 rounded border text-[10px] ${overlay.bgColor === "transparent" ? "border-indigo-400 text-indigo-400" : "border-gray-600 text-gray-400"}`}
+                          >
+                            なし
+                          </button>
+                          <button
+                            onClick={() => updateTextOverlay(overlay.id, { bgColor: "rgba(0,0,0,0.7)" })}
+                            className="px-2 h-8 rounded border border-gray-600 text-[10px] text-gray-400 bg-black/70"
+                          >
+                            黒
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 縁取り */}
+                    <div>
+                      <label className="text-[10px] text-gray-500 block mb-1">
+                        縁取り（{overlay.outlineWidth}px）
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={0}
+                          max={10}
+                          value={overlay.outlineWidth}
+                          onChange={(e) => updateTextOverlay(overlay.id, { outlineWidth: parseInt(e.target.value) })}
+                          className="flex-1"
+                        />
                         <input
                           type="color"
-                          value={overlay.color}
-                          onChange={(e) => updateTextOverlay(overlay.id, { color: e.target.value })}
-                          className="w-full h-8 rounded cursor-pointer"
+                          value={overlay.outlineColor}
+                          onChange={(e) => updateTextOverlay(overlay.id, { outlineColor: e.target.value })}
+                          className="w-8 h-8 rounded cursor-pointer border border-gray-700"
                         />
                       </div>
                     </div>
+
+                    {/* 影 */}
+                    <div>
+                      <label className="text-[10px] text-gray-500 block mb-1">
+                        影（ぼかし: {overlay.shadowBlur}px）
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={0}
+                          max={20}
+                          value={overlay.shadowBlur}
+                          onChange={(e) => updateTextOverlay(overlay.id, { shadowBlur: parseInt(e.target.value) })}
+                          className="flex-1"
+                        />
+                        <input
+                          type="color"
+                          value={overlay.shadowColor.startsWith("rgba") ? "#000000" : overlay.shadowColor}
+                          onChange={(e) => updateTextOverlay(overlay.id, { shadowColor: e.target.value })}
+                          className="w-8 h-8 rounded cursor-pointer border border-gray-700"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 位置 */}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="text-[10px] text-gray-500">X位置 ({overlay.x}%)</label>
+                        <label className="text-[10px] text-gray-500 block mb-1">X位置 ({overlay.x}%)</label>
                         <input
                           type="range"
                           min={0}
@@ -764,7 +928,7 @@ export default function VideoEditor() {
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-gray-500">Y位置 ({overlay.y}%)</label>
+                        <label className="text-[10px] text-gray-500 block mb-1">Y位置 ({overlay.y}%)</label>
                         <input
                           type="range"
                           min={0}
@@ -775,26 +939,93 @@ export default function VideoEditor() {
                         />
                       </div>
                     </div>
+
+                    {/* 位置プリセット */}
+                    <div>
+                      <label className="text-[10px] text-gray-500 block mb-1">位置プリセット</label>
+                      <div className="grid grid-cols-3 gap-1">
+                        {[
+                          { label: "左上", x: 5, y: 15 },
+                          { label: "中央上", x: 50, y: 15 },
+                          { label: "右上", x: 85, y: 15 },
+                          { label: "左中", x: 5, y: 50 },
+                          { label: "中央", x: 50, y: 50 },
+                          { label: "右中", x: 85, y: 50 },
+                          { label: "左下", x: 5, y: 85 },
+                          { label: "中央下", x: 50, y: 85 },
+                          { label: "右下", x: 85, y: 85 },
+                        ].map((pos) => (
+                          <button
+                            key={pos.label}
+                            onClick={() => updateTextOverlay(overlay.id, { x: pos.x, y: pos.y })}
+                            className="px-1 py-1.5 bg-gray-800 rounded text-[10px] text-gray-400 hover:bg-gray-700 hover:text-gray-200 transition-colors"
+                          >
+                            {pos.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 表示時間 */}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="text-[10px] text-gray-500">表示開始</label>
+                        <label className="text-[10px] text-gray-500 block mb-1">表示開始（秒）</label>
                         <input
                           type="number"
                           step={0.1}
                           value={overlay.startTime}
                           onChange={(e) => updateTextOverlay(overlay.id, { startTime: parseFloat(e.target.value) })}
-                          className="w-full px-2 py-1 bg-gray-900 border border-gray-700 rounded text-xs text-white"
+                          className="w-full px-2 py-1.5 bg-gray-900 border border-gray-700 rounded text-xs text-white"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-gray-500">表示終了</label>
+                        <label className="text-[10px] text-gray-500 block mb-1">表示終了（秒）</label>
                         <input
                           type="number"
                           step={0.1}
                           value={overlay.endTime}
                           onChange={(e) => updateTextOverlay(overlay.id, { endTime: parseFloat(e.target.value) })}
-                          className="w-full px-2 py-1 bg-gray-900 border border-gray-700 rounded text-xs text-white"
+                          className="w-full px-2 py-1.5 bg-gray-900 border border-gray-700 rounded text-xs text-white"
                         />
+                      </div>
+                    </div>
+
+                    {/* スタイルプリセット */}
+                    <div>
+                      <label className="text-[10px] text-gray-500 block mb-1">スタイルプリセット</label>
+                      <div className="grid grid-cols-4 gap-1">
+                        <button
+                          onClick={() => updateTextOverlay(overlay.id, {
+                            color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", outlineWidth: 0, shadowBlur: 0,
+                          })}
+                          className="px-1 py-2 bg-gray-800 rounded text-[10px] text-white hover:bg-gray-700"
+                        >
+                          シンプル
+                        </button>
+                        <button
+                          onClick={() => updateTextOverlay(overlay.id, {
+                            color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 4, shadowBlur: 0,
+                          })}
+                          className="px-1 py-2 bg-gray-800 rounded text-[10px] text-white hover:bg-gray-700"
+                        >
+                          縁取り
+                        </button>
+                        <button
+                          onClick={() => updateTextOverlay(overlay.id, {
+                            color: "#ffff00", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 3, shadowBlur: 8, shadowColor: "#000000",
+                          })}
+                          className="px-1 py-2 bg-gray-800 rounded text-[10px] text-yellow-300 hover:bg-gray-700"
+                        >
+                          YouTube風
+                        </button>
+                        <button
+                          onClick={() => updateTextOverlay(overlay.id, {
+                            color: "#ff3366", bgColor: "transparent", outlineColor: "#ffffff", outlineWidth: 3, shadowBlur: 12, shadowColor: "#ff336680",
+                          })}
+                          className="px-1 py-2 bg-gray-800 rounded text-[10px] text-pink-400 hover:bg-gray-700"
+                        >
+                          ネオン
+                        </button>
                       </div>
                     </div>
                   </div>
