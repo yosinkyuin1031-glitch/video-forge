@@ -6,13 +6,27 @@ let ffmpeg: FFmpeg | null = null;
 export async function getFFmpeg(): Promise<FFmpeg> {
   if (ffmpeg && ffmpeg.loaded) return ffmpeg;
 
+  // SharedArrayBuffer check
+  if (typeof SharedArrayBuffer === "undefined") {
+    throw new Error(
+      "SharedArrayBufferが利用できません。ブラウザのセキュリティヘッダー(COOP/COEP)が必要です。ページを再読み込みしてください。"
+    );
+  }
+
   ffmpeg = new FFmpeg();
 
   const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm";
-  await ffmpeg.load({
-    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-  });
+  try {
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+    });
+  } catch (e) {
+    ffmpeg = null;
+    throw new Error(
+      `FFmpegの読み込みに失敗しました: ${e instanceof Error ? e.message : "不明なエラー"}`
+    );
+  }
 
   return ffmpeg;
 }
