@@ -74,9 +74,11 @@ export async function detectSilence(
 
   const segments: SilentSegment[] = [];
   let currentStart: number | null = null;
+  const logMessages: string[] = [];
 
   // Use a named handler so we can remove it after exec completes
   const logHandler = ({ message }: { message: string }) => {
+    logMessages.push(message);
     // Parse silence_start
     const startMatch = message.match(/silence_start:\s*([\d.]+)/);
     if (startMatch) {
@@ -95,14 +97,31 @@ export async function detectSilence(
   onProgress?.("無音区間を検出中...");
 
   try {
-    await ff.exec([
+    // Use output file instead of "-" which can cause issues in some wasm builds
+    const exitCode = await ff.exec([
       "-i", "input",
       "-af", `silencedetect=noise=${threshold}dB:d=${minDuration}`,
-      "-f", "null", "-"
+      "-f", "null",
+      "devnull"
     ]);
+    // Even if exit code is non-zero, we may have captured segments
+    if (exitCode !== 0 && segments.length === 0) {
+      const lastLogs = logMessages.slice(-5).join(" | ");
+      throw new Error(`FFmpeg exit code ${exitCode}: ${lastLogs}`);
+    }
+  } catch (e) {
+    // If we captured segments despite the error, return them
+    if (segments.length > 0) {
+      return segments;
+    }
+    const lastLogs = logMessages.slice(-5).join(" | ");
+    throw new Error(
+      `無音検出コマンド失敗: ${e instanceof Error ? e.message : String(e)} [logs: ${lastLogs}]`
+    );
   } finally {
     ff.off("log", logHandler);
     await ff.deleteFile("input").catch(() => {});
+    await ff.deleteFile("devnull").catch(() => {});
   }
 
   return segments;
