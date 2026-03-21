@@ -1,33 +1,54 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { TextOverlay, SubtitleEntry, EditorTool, ASPECT_PRESETS, FONT_OPTIONS, ClipMarker, FilterSettings, TransitionSetting, TransitionType, StickerOverlay, CollageLayout, CollageItem, CollageSettings, SlideshowImage, SlideshowSettings, PipSettings, MosaicArea, ChromaKeySettings, TextAnimation, VideoTemplate } from "@/lib/types";
-import { detectSilence, removeSilence, trimVideo, addBgm, exportWithAspectRatio, SilentSegment, changeSpeed, splitAndReorder, applyFilters, applyTransitions, createCollage, createSlideshow, applyPip, exportGif, applyMosaicAreas, applyChromaKey } from "@/lib/ffmpeg-utils";
+import { TextOverlay, SubtitleEntry, EditorTool, ASPECT_PRESETS, FONT_OPTIONS, ClipMarker, FilterSettings, TransitionSetting, TransitionType, StickerOverlay, CollageLayout, CollageItem, CollageSettings, SlideshowImage, SlideshowSettings, PipSettings, MosaicArea, ChromaKeySettings, TextAnimation, VideoTemplate, Keyframe, KeyframeProperties } from "@/lib/types";
+import { detectSilence, removeSilence, trimVideo, addBgm, exportWithAspectRatio, SilentSegment, changeSpeed, splitAndReorder, applyFilters, applyTransitions, createCollage, createSlideshow, applyPip, exportGif, applyMosaicAreas, applyChromaKey, extractAudio } from "@/lib/ffmpeg-utils";
 
 // ===== BGM LIBRARY =====
-const BGM_CATEGORIES = [
+type BgmItemKey =
+  | "upbeat" | "chill" | "cinematic" | "happy" | "epic" | "jazz"
+  | "techno" | "acoustic" | "horror" | "tropical" | "piano" | "rock"
+  | "clap" | "drumroll" | "chime" | "buzzer" | "pop" | "swoosh"
+  | "click" | "bell" | "correct" | "wrong" | "countdown" | "fanfare"
+  | "dramatic" | "sparkle" | "laugh" | "heartbeat";
+
+const BGM_CATEGORIES: { name: string; items: { name: string; desc: string; duration: string; key: BgmItemKey }[] }[] = [
   {
     name: "BGM",
     items: [
-      { name: "アップビート", desc: "明るいポップ", bpm: 120, freq: 440, type: "square" as OscillatorType },
-      { name: "チル", desc: "リラックスLoFi", bpm: 85, freq: 220, type: "sine" as OscillatorType },
-      { name: "シネマティック", desc: "映画風", bpm: 90, freq: 330, type: "sine" as OscillatorType },
-      { name: "ハッピー", desc: "楽しいウクレレ", bpm: 110, freq: 523, type: "triangle" as OscillatorType },
-      { name: "エピック", desc: "壮大オーケストラ", bpm: 100, freq: 165, type: "sawtooth" as OscillatorType },
-      { name: "ジャズ", desc: "おしゃれジャズ", bpm: 95, freq: 293, type: "triangle" as OscillatorType },
+      { name: "アップビート", desc: "明るいポップ・高速アルペジオ", duration: "8秒", key: "upbeat" },
+      { name: "チル/LoFi", desc: "ゆったりジャジーな雰囲気", duration: "8秒", key: "chill" },
+      { name: "シネマティック", desc: "映画風・低ドローン", duration: "8秒", key: "cinematic" },
+      { name: "ハッピー", desc: "楽しいウクレレ風", duration: "8秒", key: "happy" },
+      { name: "エピック", desc: "壮大オーケストラ・ティンパニ", duration: "8秒", key: "epic" },
+      { name: "ジャズ", desc: "ウォーキングベース・スウィング", duration: "8秒", key: "jazz" },
+      { name: "テクノ/EDM", desc: "4つ打ちキック・シンセ", duration: "8秒", key: "techno" },
+      { name: "アコースティック", desc: "優しいフィンガーピッキング", duration: "8秒", key: "acoustic" },
+      { name: "ホラー", desc: "不協和音・緊張感", duration: "8秒", key: "horror" },
+      { name: "トロピカル", desc: "スチールドラム・レゲエ", duration: "8秒", key: "tropical" },
+      { name: "ピアノバラード", desc: "優しいピアノアルペジオ", duration: "8秒", key: "piano" },
+      { name: "ロック", desc: "パワーコード・ドラム", duration: "8秒", key: "rock" },
     ]
   },
   {
     name: "効果音",
     items: [
-      { name: "拍手", desc: "パチパチ", bpm: 0, freq: 800, type: "square" as OscillatorType },
-      { name: "ドラムロール", desc: "ダダダダ", bpm: 0, freq: 100, type: "sawtooth" as OscillatorType },
-      { name: "チャイム", desc: "キラーン", bpm: 0, freq: 1046, type: "sine" as OscillatorType },
-      { name: "ブザー", desc: "ブブー", bpm: 0, freq: 200, type: "sawtooth" as OscillatorType },
-      { name: "ポップ", desc: "ポンッ", bpm: 0, freq: 600, type: "sine" as OscillatorType },
-      { name: "スウッシュ", desc: "シュッ", bpm: 0, freq: 1200, type: "sine" as OscillatorType },
-      { name: "クリック", desc: "カチッ", bpm: 0, freq: 900, type: "square" as OscillatorType },
-      { name: "ベル", desc: "チーン", bpm: 0, freq: 880, type: "sine" as OscillatorType },
+      { name: "拍手", desc: "パチパチ", duration: "1.5秒", key: "clap" },
+      { name: "ドラムロール", desc: "ダダダダ", duration: "2秒", key: "drumroll" },
+      { name: "チャイム", desc: "キラーン", duration: "2秒", key: "chime" },
+      { name: "ブザー", desc: "ブブー", duration: "0.8秒", key: "buzzer" },
+      { name: "ポップ", desc: "ポンッ", duration: "0.5秒", key: "pop" },
+      { name: "スウッシュ", desc: "シュッ", duration: "0.8秒", key: "swoosh" },
+      { name: "クリック", desc: "カチッ", duration: "0.2秒", key: "click" },
+      { name: "ベル", desc: "チーン", duration: "2秒", key: "bell" },
+      { name: "正解", desc: "ピンポン↑", duration: "0.6秒", key: "correct" },
+      { name: "不正解", desc: "ブー↓", duration: "0.6秒", key: "wrong" },
+      { name: "カウントダウン", desc: "3・2・1・ドン", duration: "3秒", key: "countdown" },
+      { name: "ファンファーレ", desc: "昇順コード", duration: "1.5秒", key: "fanfare" },
+      { name: "ドラマティック", desc: "ドーン！大きなインパクト", duration: "1.5秒", key: "dramatic" },
+      { name: "キラキラ", desc: "高音キラキラカスケード", duration: "1秒", key: "sparkle" },
+      { name: "笑い声風", desc: "リズミカルな変調音", duration: "1.5秒", key: "laugh" },
+      { name: "心臓の鼓動", desc: "低いドクドク", duration: "2秒", key: "heartbeat" },
     ]
   }
 ];
@@ -286,36 +307,482 @@ const VIDEO_TEMPLATES: VideoTemplate[] = [
   },
 ];
 
-async function generateAudioBlob(freq: number, oscType: OscillatorType, isBgm: boolean): Promise<Blob> {
-  const duration = isBgm ? 8 : 1;
+async function generateAudioBlob(key: BgmItemKey): Promise<Blob> {
   const sampleRate = 44100;
-  const ctx = new OfflineAudioContext(1, sampleRate * duration, sampleRate);
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = oscType;
-  osc.frequency.setValueAtTime(freq, 0);
-  if (isBgm) {
-    // Simple arpeggio pattern for BGM
-    const notes = [freq, freq * 1.25, freq * 1.5, freq * 2];
-    const noteLen = 0.25;
-    for (let i = 0; i < Math.floor(duration / noteLen); i++) {
-      osc.frequency.setValueAtTime(notes[i % notes.length], i * noteLen);
+
+  // Helper to create oscillator node
+  function makeOsc(ctx: OfflineAudioContext, freq: number, type: OscillatorType, start: number, stop: number, gainVal: number, gainEnvelope?: { t: number; v: number }[]): void {
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, start);
+    g.gain.setValueAtTime(gainVal, start);
+    if (gainEnvelope) {
+      for (const pt of gainEnvelope) g.gain.linearRampToValueAtTime(pt.v, start + pt.t);
+    } else {
+      g.gain.linearRampToValueAtTime(0, stop);
     }
-    gain.gain.setValueAtTime(0.3, 0);
-    gain.gain.linearRampToValueAtTime(0, duration - 0.2);
-  } else {
-    gain.gain.setValueAtTime(0.5, 0);
-    gain.gain.exponentialRampToValueAtTime(0.001, duration - 0.05);
+    osc.connect(g);
+    g.connect(ctx.destination);
+    osc.start(start);
+    osc.stop(stop);
   }
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  osc.start(0);
-  osc.stop(duration);
+
+  function makeNote(ctx: OfflineAudioContext, freq: number, type: OscillatorType, start: number, dur: number, vol: number = 0.2): void {
+    makeOsc(ctx, freq, type, start, start + dur, vol, [{ t: dur * 0.8, v: vol }, { t: dur, v: 0 }]);
+  }
+
+  // BGMs: 8 seconds
+  if (key === "upbeat") {
+    const dur = 8;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Major pentatonic arpeggio in C: C4 E4 G4 A4 C5
+    const notes = [261.63, 329.63, 392.00, 440.00, 523.25, 440.00, 392.00, 329.63];
+    const noteLen = 0.2;
+    let t = 0;
+    while (t < dur - noteLen) {
+      const note = notes[Math.floor(t / noteLen) % notes.length];
+      makeNote(ctx, note, "square", t, noteLen, 0.18);
+      makeNote(ctx, note * 0.5, "triangle", t, noteLen, 0.08);
+      t += noteLen;
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "chill") {
+    const dur = 8;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Slow jazzy chords: Cmaj7 → Am7 → Fmaj7 → G7
+    const chords = [
+      [261.63, 329.63, 392.00, 493.88],
+      [220.00, 261.63, 329.63, 392.00],
+      [174.61, 220.00, 261.63, 349.23],
+      [196.00, 246.94, 293.66, 392.00],
+    ];
+    for (let ci = 0; ci < 4; ci++) {
+      const start = ci * 2;
+      for (const f of chords[ci]) {
+        makeNote(ctx, f, "sine", start, 1.8, 0.1);
+        makeNote(ctx, f * 0.5, "triangle", start, 1.8, 0.06);
+      }
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "cinematic") {
+    const dur = 8;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Low drone + slow sweep
+    makeOsc(ctx, 55, "sine", 0, dur, 0.25, [{ t: 2, v: 0.3 }, { t: 6, v: 0.3 }, { t: 8, v: 0 }]);
+    makeOsc(ctx, 82.5, "sine", 0, dur, 0.1, [{ t: 3, v: 0.15 }, { t: 7, v: 0.1 }, { t: 8, v: 0 }]);
+    // Sweeping strings feel with sawtooth
+    const osc2 = ctx.createOscillator();
+    const g2 = ctx.createGain();
+    osc2.type = "sawtooth";
+    osc2.frequency.setValueAtTime(110, 0);
+    osc2.frequency.linearRampToValueAtTime(165, 4);
+    osc2.frequency.linearRampToValueAtTime(110, 8);
+    g2.gain.setValueAtTime(0, 0);
+    g2.gain.linearRampToValueAtTime(0.08, 2);
+    g2.gain.linearRampToValueAtTime(0.12, 5);
+    g2.gain.linearRampToValueAtTime(0, 8);
+    osc2.connect(g2); g2.connect(ctx.destination);
+    osc2.start(0); osc2.stop(dur);
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "happy") {
+    const dur = 8;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Ukulele-style: C major strumming pattern
+    const strum = [261.63, 329.63, 392.00, 523.25];
+    const beatLen = 0.4;
+    let t = 0;
+    while (t < dur - beatLen) {
+      // Strum up
+      for (let i = 0; i < strum.length; i++) {
+        makeNote(ctx, strum[i], "triangle", t + i * 0.02, 0.35, 0.15);
+      }
+      t += beatLen;
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "epic") {
+    const dur = 8;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Building orchestral with timpani-like drums
+    makeOsc(ctx, 65.41, "sine", 0, dur, 0.0, [{ t: 1, v: 0.2 }, { t: 4, v: 0.3 }, { t: 7, v: 0.35 }, { t: 8, v: 0.1 }]);
+    makeOsc(ctx, 130.81, "sawtooth", 0, dur, 0.0, [{ t: 2, v: 0.06 }, { t: 5, v: 0.12 }, { t: 7, v: 0.15 }, { t: 8, v: 0 }]);
+    // Timpani-like hits
+    for (let beat = 0; beat < 8; beat++) {
+      const t = beat;
+      const pitch = beat < 4 ? 65.41 : 87.31;
+      makeOsc(ctx, pitch, "sine", t, t + 0.3, 0.4 * (beat / 8 + 0.3), [{ t: 0.05, v: 0.5 * (beat / 8 + 0.3) }, { t: 0.3, v: 0 }]);
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "jazz") {
+    const dur = 8;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Walking bass: E2 G#2 B2 E3 ...
+    const bassLine = [82.41, 103.83, 123.47, 164.81, 138.59, 123.47, 103.83, 82.41];
+    const noteLen = 0.5;
+    for (let i = 0; i < Math.floor(dur / noteLen); i++) {
+      makeNote(ctx, bassLine[i % bassLine.length], "triangle", i * noteLen, noteLen * 0.9, 0.2);
+    }
+    // Swing chords on beats 2 and 4
+    const chordNotes = [207.65, 261.63, 311.13];
+    for (let beat = 1; beat < 8; beat += 2) {
+      const start = beat * 0.5;
+      for (const f of chordNotes) {
+        makeNote(ctx, f, "sine", start, 0.3, 0.1);
+      }
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "techno") {
+    const dur = 8;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Four-on-floor kick simulation
+    for (let beat = 0; beat < 8; beat++) {
+      const t = beat * 0.5;
+      makeOsc(ctx, 80, "sine", t, t + 0.15, 0.5, [{ t: 0.02, v: 0.6 }, { t: 0.1, v: 0.1 }, { t: 0.15, v: 0 }]);
+      // Frequency sweep for kick
+      const kickOsc = ctx.createOscillator();
+      const kickGain = ctx.createGain();
+      kickOsc.type = "sine";
+      kickOsc.frequency.setValueAtTime(150, t);
+      kickOsc.frequency.exponentialRampToValueAtTime(40, t + 0.15);
+      kickGain.gain.setValueAtTime(0.4, t);
+      kickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+      kickOsc.connect(kickGain); kickGain.connect(ctx.destination);
+      kickOsc.start(t); kickOsc.stop(t + 0.15);
+    }
+    // Synth stabs on offbeats
+    const synthNotes = [440, 493.88, 523.25, 440];
+    for (let beat = 1; beat < 16; beat += 2) {
+      const t = beat * 0.25;
+      makeNote(ctx, synthNotes[Math.floor(beat / 2) % synthNotes.length], "square", t, 0.15, 0.15);
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "acoustic") {
+    const dur = 8;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Fingerpicking: G major pattern
+    const pattern = [196.00, 392.00, 493.88, 392.00, 246.94, 392.00, 493.88, 392.00];
+    const noteLen = 0.25;
+    for (let i = 0; i < Math.floor(dur / noteLen); i++) {
+      makeNote(ctx, pattern[i % pattern.length], "triangle", i * noteLen, noteLen * 0.9, 0.18);
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "horror") {
+    const dur = 8;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Dissonant low tones with tritone
+    makeOsc(ctx, 55, "sine", 0, dur, 0.2, [{ t: 2, v: 0.25 }, { t: 5, v: 0.2 }, { t: 8, v: 0.05 }]);
+    makeOsc(ctx, 77.78, "sine", 0, dur, 0.1, [{ t: 3, v: 0.15 }, { t: 8, v: 0.05 }]); // tritone
+    makeOsc(ctx, 41.20, "sawtooth", 0, dur, 0.05, [{ t: 4, v: 0.08 }, { t: 8, v: 0 }]);
+    // Random tremolo effect via frequency modulation
+    const tremOsc = ctx.createOscillator();
+    const tremGain = ctx.createGain();
+    tremOsc.type = "sine";
+    tremOsc.frequency.setValueAtTime(110, 0);
+    tremOsc.frequency.linearRampToValueAtTime(116.54, 4);
+    tremOsc.frequency.linearRampToValueAtTime(103.83, 8);
+    tremGain.gain.setValueAtTime(0, 0);
+    tremGain.gain.linearRampToValueAtTime(0.06, 1);
+    tremGain.gain.linearRampToValueAtTime(0.1, 6);
+    tremGain.gain.linearRampToValueAtTime(0, 8);
+    tremOsc.connect(tremGain); tremGain.connect(ctx.destination);
+    tremOsc.start(0); tremOsc.stop(dur);
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "tropical") {
+    const dur = 8;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Steel drum style: high triangle waves
+    const melody = [523.25, 659.25, 783.99, 659.25, 523.25, 587.33, 659.25, 523.25];
+    const noteLen = 0.3;
+    let t = 0;
+    while (t < dur - noteLen) {
+      const note = melody[Math.floor(t / noteLen) % melody.length];
+      makeNote(ctx, note, "triangle", t, noteLen * 0.7, 0.22);
+      t += noteLen;
+    }
+    // Bass reggae pattern (offbeat)
+    const bassNotes = [130.81, 130.81, 174.61, 130.81];
+    for (let i = 0; i < 8; i++) {
+      const bt = i * 0.5 + 0.25;
+      makeNote(ctx, bassNotes[i % bassNotes.length], "sine", bt, 0.2, 0.15);
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "piano") {
+    const dur = 8;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Gentle piano arpeggios: C major
+    const arp = [261.63, 329.63, 392.00, 523.25, 392.00, 329.63];
+    const noteLen = 0.33;
+    for (let i = 0; i < Math.floor(dur / noteLen); i++) {
+      const f = arp[i % arp.length];
+      const t = i * noteLen;
+      makeNote(ctx, f, "sine", t, noteLen * 1.2, 0.2);
+      makeNote(ctx, f * 2, "sine", t, noteLen * 0.5, 0.05); // harmonic
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "rock") {
+    const dur = 8;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Power chord progression: E5 A5 D5 A5
+    const chords = [[165, 220], [220, 293.66], [293.66, 392], [220, 293.66]];
+    for (let ci = 0; ci < 4; ci++) {
+      const start = ci * 2;
+      for (const f of chords[ci]) {
+        makeNote(ctx, f, "sawtooth", start, 1.8, 0.12);
+      }
+      // Drum hit at each chord change
+      makeOsc(ctx, 80, "sine", start, start + 0.12, 0.35, [{ t: 0.02, v: 0.4 }, { t: 0.12, v: 0 }]);
+    }
+    // Snare on beats 2 and 4
+    for (let beat = 1; beat < 8; beat += 2) {
+      const t = beat * 0.5;
+      makeOsc(ctx, 200, "sawtooth", t, t + 0.08, 0.2, [{ t: 0.01, v: 0.25 }, { t: 0.08, v: 0 }]);
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  // ===== SOUND EFFECTS =====
+  if (key === "clap") {
+    const dur = 1.5;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Multiple clap pulses
+    for (let i = 0; i < 5; i++) {
+      const t = i * 0.12;
+      makeOsc(ctx, 800 + i * 100, "square", t, t + 0.08, 0.3, [{ t: 0.005, v: 0.4 }, { t: 0.08, v: 0 }]);
+      makeOsc(ctx, 1200 + i * 150, "square", t, t + 0.06, 0.15, [{ t: 0.003, v: 0.2 }, { t: 0.06, v: 0 }]);
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "drumroll") {
+    const dur = 2;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    let t = 0;
+    let interval = 0.12;
+    while (t < dur) {
+      makeOsc(ctx, 120, "sawtooth", t, t + interval * 0.6, 0.3 * (t / dur + 0.3), [{ t: 0.01, v: 0.4 * (t / dur + 0.3) }, { t: interval * 0.6, v: 0 }]);
+      t += interval;
+      interval = Math.max(0.03, interval * 0.96); // accelerate
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "chime") {
+    const dur = 2;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Bell-like: fundamental + harmonics with long decay
+    const harmonics = [1046.50, 2093.00, 3139.50, 4186.01];
+    const decays = [1.8, 1.2, 0.8, 0.5];
+    for (let i = 0; i < harmonics.length; i++) {
+      makeOsc(ctx, harmonics[i], "sine", 0, dur, 0.25 / (i + 1), [{ t: 0.01, v: 0.3 / (i + 1) }, { t: decays[i], v: 0 }]);
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "buzzer") {
+    const dur = 0.8;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    makeOsc(ctx, 160, "sawtooth", 0, dur, 0.4, [{ t: 0.02, v: 0.5 }, { t: 0.6, v: 0.4 }, { t: 0.8, v: 0 }]);
+    makeOsc(ctx, 120, "square", 0, dur, 0.2, [{ t: 0.6, v: 0.2 }, { t: 0.8, v: 0 }]);
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "pop") {
+    const dur = 0.5;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(800, 0);
+    osc.frequency.exponentialRampToValueAtTime(200, 0.1);
+    g.gain.setValueAtTime(0.6, 0);
+    g.gain.exponentialRampToValueAtTime(0.001, 0.3);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(0); osc.stop(dur);
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "swoosh") {
+    const dur = 0.8;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(2000, 0);
+    osc.frequency.exponentialRampToValueAtTime(300, dur);
+    g.gain.setValueAtTime(0, 0);
+    g.gain.linearRampToValueAtTime(0.35, 0.1);
+    g.gain.linearRampToValueAtTime(0, dur);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(0); osc.stop(dur);
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "click") {
+    const dur = 0.2;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    makeOsc(ctx, 1000, "square", 0, dur, 0.5, [{ t: 0.005, v: 0.6 }, { t: 0.05, v: 0.1 }, { t: 0.2, v: 0 }]);
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "bell") {
+    const dur = 2;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    makeOsc(ctx, 880, "sine", 0, dur, 0.4, [{ t: 0.01, v: 0.5 }, { t: 1.5, v: 0.05 }, { t: 2, v: 0 }]);
+    makeOsc(ctx, 1760, "sine", 0, dur, 0.12, [{ t: 0.01, v: 0.15 }, { t: 0.8, v: 0 }]);
+    makeOsc(ctx, 2640, "sine", 0, dur, 0.05, [{ t: 0.01, v: 0.06 }, { t: 0.4, v: 0 }]);
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "correct") {
+    const dur = 0.6;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    makeNote(ctx, 523.25, "sine", 0, 0.2, 0.35);
+    makeNote(ctx, 659.25, "sine", 0.2, 0.4, 0.4);
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "wrong") {
+    const dur = 0.6;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    makeNote(ctx, 311.13, "sawtooth", 0, 0.2, 0.3);
+    makeNote(ctx, 233.08, "sawtooth", 0.2, 0.4, 0.3);
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "countdown") {
+    const dur = 3;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Three beeps
+    for (let i = 0; i < 3; i++) {
+      makeNote(ctx, 800, "sine", i * 0.8, 0.2, 0.35);
+    }
+    // Final ding (higher)
+    makeOsc(ctx, 1200, "sine", 2.5, 3, 0.4, [{ t: 0.01, v: 0.45 }, { t: 0.5, v: 0 }]);
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "fanfare") {
+    const dur = 1.5;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    const notes = [392.00, 493.88, 587.33, 783.99];
+    for (let i = 0; i < notes.length; i++) {
+      makeNote(ctx, notes[i], "triangle", i * 0.25, 0.4, 0.3);
+      makeNote(ctx, notes[i] * 0.5, "sine", i * 0.25, 0.4, 0.1);
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "dramatic") {
+    const dur = 1.5;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Big reverb impact
+    const freqs = [55, 82.41, 110, 164.81];
+    for (const f of freqs) {
+      makeOsc(ctx, f, "sawtooth", 0, dur, 0.15, [{ t: 0.03, v: 0.25 }, { t: 0.5, v: 0.1 }, { t: 1.5, v: 0 }]);
+    }
+    makeOsc(ctx, 41.20, "sine", 0, dur, 0.5, [{ t: 0.02, v: 0.6 }, { t: 0.3, v: 0.2 }, { t: 1.5, v: 0 }]);
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "sparkle") {
+    const dur = 1;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Rapid high frequency cascade
+    const sparkFreqs = [2093, 2349, 2637, 2960, 3136, 3520, 3951, 4186];
+    for (let i = 0; i < sparkFreqs.length; i++) {
+      const t = i * 0.08;
+      makeOsc(ctx, sparkFreqs[i], "sine", t, t + 0.3, 0.15, [{ t: 0.01, v: 0.2 }, { t: 0.3, v: 0 }]);
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "laugh") {
+    const dur = 1.5;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Rhythmic modulated tone
+    for (let i = 0; i < 6; i++) {
+      const t = i * 0.18;
+      const freq = 300 + (i % 3) * 50;
+      makeOsc(ctx, freq, "sine", t, t + 0.12, 0.25, [{ t: 0.02, v: 0.3 }, { t: 0.12, v: 0 }]);
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  if (key === "heartbeat") {
+    const dur = 2;
+    const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+    // Two thumps then pause
+    const beats = [0, 0.2, 1.0, 1.2];
+    for (const t of beats) {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(80, t);
+      osc.frequency.exponentialRampToValueAtTime(40, t + 0.18);
+      g.gain.setValueAtTime(0.55, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(t); osc.stop(t + 0.28);
+    }
+    const rendered = await ctx.startRendering();
+    return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
+  }
+
+  // Fallback
+  const dur = 1;
+  const ctx = new OfflineAudioContext(1, sampleRate * dur, sampleRate);
+  makeNote(ctx, 440, "sine", 0, 0.5, 0.3);
   const rendered = await ctx.startRendering();
-  // Convert to WAV
-  const buffer = rendered.getChannelData(0);
-  const wav = encodeWav(buffer, sampleRate);
-  return new Blob([wav], { type: "audio/wav" });
+  return new Blob([encodeWav(rendered.getChannelData(0), sampleRate)], { type: "audio/wav" });
 }
 
 function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
@@ -342,6 +809,44 @@ function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
     view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
   }
   return buf;
+}
+
+// ===== KEYFRAME INTERPOLATION =====
+function interpolateKeyframes(keyframes: Keyframe[], currentTime: number): KeyframeProperties {
+  if (keyframes.length === 0) return {};
+
+  const sorted = [...keyframes].sort((a, b) => a.time - b.time);
+
+  let prev = sorted[0];
+  let next = sorted[sorted.length - 1];
+
+  for (let i = 0; i < sorted.length - 1; i++) {
+    if (currentTime >= sorted[i].time && currentTime <= sorted[i + 1].time) {
+      prev = sorted[i];
+      next = sorted[i + 1];
+      break;
+    }
+  }
+
+  if (currentTime <= prev.time) return prev.properties;
+  if (currentTime >= next.time) return next.properties;
+
+  const t = (currentTime - prev.time) / (next.time - prev.time);
+  const result: KeyframeProperties = {};
+
+  for (const key of ['x', 'y', 'fontSize', 'opacity', 'rotation', 'scale'] as const) {
+    const prevVal = prev.properties[key];
+    const nextVal = next.properties[key];
+    if (prevVal !== undefined && nextVal !== undefined) {
+      result[key] = prevVal + (nextVal - prevVal) * t;
+    } else if (prevVal !== undefined) {
+      result[key] = prevVal;
+    } else if (nextVal !== undefined) {
+      result[key] = nextVal;
+    }
+  }
+
+  return result;
 }
 
 // ===== AUTOSAVE =====
@@ -384,6 +889,15 @@ export default function VideoEditor() {
   // Subtitles
   const [subtitles, setSubtitles] = useState<SubtitleEntry[]>([]);
   const [isListening, setIsListening] = useState(false);
+  const [subtitleMode, setSubtitleMode] = useState<"browser" | "whisper">("browser");
+  const [whisperApiKey, setWhisperApiKey] = useState<string>(() => {
+    try { return localStorage.getItem("videoforge_whisper_key") || ""; } catch { return ""; }
+  });
+  const [whisperKeyInput, setWhisperKeyInput] = useState<string>("");
+  const [showWhisperKey, setShowWhisperKey] = useState(false);
+  const [whisperKeySaved, setWhisperKeySaved] = useState<boolean>(() => {
+    try { return !!localStorage.getItem("videoforge_whisper_key"); } catch { return false; }
+  });
 
   // BGM
   const [bgmFile, setBgmFile] = useState<File | null>(null);
@@ -391,6 +905,7 @@ export default function VideoEditor() {
   const [bgmLibraryAudio, setBgmLibraryAudio] = useState<HTMLAudioElement | null>(null);
   const [previewingBgmIdx, setPreviewingBgmIdx] = useState<string | null>(null);
   const [generatingBgm, setGeneratingBgm] = useState<string | null>(null);
+  const [activeBgmCategory, setActiveBgmCategory] = useState(0);
 
   // Export
   const [selectedPresetIdx, setSelectedPresetIdx] = useState(0);
@@ -598,8 +1113,12 @@ export default function VideoEditor() {
   const [editingStickerId, setEditingStickerId] = useState<string | null>(null);
   const [activeStickerCategory, setActiveStickerCategory] = useState(0);
 
+  // ===== KEYFRAMES =====
+  const [selectedKeyframeTarget, setSelectedKeyframeTarget] = useState<string | null>(null);
+  const [selectedKeyframeId, setSelectedKeyframeId] = useState<string | null>(null);
+
   const addSticker = (emoji: string) => {
-    const newSticker: StickerOverlay = { id: `sticker-${Date.now()}`, emoji, x: 50, y: 50, size: 64, rotation: 0, startTime: currentTime, endTime: Math.min(currentTime + 5, duration || currentTime + 5), opacity: 1, animation: "none" };
+    const newSticker: StickerOverlay = { id: `sticker-${Date.now()}`, emoji, x: 50, y: 50, size: 64, rotation: 0, startTime: currentTime, endTime: Math.min(currentTime + 5, duration || currentTime + 5), opacity: 1, animation: "none", keyframes: [] };
     setStickers((prev) => [...prev, newSticker]);
     setEditingStickerId(newSticker.id);
   };
@@ -792,6 +1311,7 @@ export default function VideoEditor() {
       shadowOffsetX: partial.shadowOffsetX ?? 0,
       shadowOffsetY: partial.shadowOffsetY ?? 0,
       animation: (partial.animation ?? "none") as TextAnimation,
+      keyframes: [],
     }));
 
     // Build full StickerOverlay objects
@@ -806,6 +1326,7 @@ export default function VideoEditor() {
       endTime: endT,
       opacity: partial.opacity ?? 1,
       animation: (partial.animation ?? "none") as StickerOverlay["animation"],
+      keyframes: [],
     }));
 
     setTextOverlays((prev) => [...prev, ...newTexts]);
@@ -1099,6 +1620,7 @@ export default function VideoEditor() {
       color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", startTime: currentTime, endTime: Math.min(currentTime + 5, duration),
       bold: true, italic: false, outlineColor: "#000000", outlineWidth: 0,
       shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 0, shadowOffsetX: 2, shadowOffsetY: 2, animation: "none",
+      keyframes: [],
     };
     const newOverlays = [...textOverlays, newText];
     setTextOverlays(newOverlays); setEditingTextId(newText.id);
@@ -1144,6 +1666,69 @@ export default function VideoEditor() {
     if (videoRef.current) { videoRef.current.pause(); setIsPlaying(false); }
   };
 
+  const handleSaveWhisperKey = () => {
+    const key = whisperKeyInput.trim();
+    if (!key) return;
+    try { localStorage.setItem("videoforge_whisper_key", key); } catch {}
+    setWhisperApiKey(key);
+    setWhisperKeySaved(true);
+    setWhisperKeyInput("");
+    setProgressMsg("APIキーを保存しました");
+  };
+
+  const handleChangeWhisperKey = () => {
+    setWhisperKeySaved(false);
+    setWhisperKeyInput(whisperApiKey);
+  };
+
+  const handleWhisperSubtitles = async () => {
+    if (!videoFile || !whisperApiKey) return;
+    await ensureFFmpeg();
+    setProcessing(true);
+    try {
+      setProgressMsg("音声を抽出中...");
+      const audioBlob = await extractAudio(videoFile, setProgressMsg);
+
+      setProgressMsg("AIが字幕を生成中...");
+      const formData = new FormData();
+      formData.append("file", audioBlob, "audio.wav");
+      formData.append("model", "whisper-1");
+      formData.append("language", "ja");
+      formData.append("response_format", "verbose_json");
+      formData.append("timestamp_granularities[]", "segment");
+
+      const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${whisperApiKey}` },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        throw new Error(`${response.status}${errText ? ": " + errText.slice(0, 120) : ""}`);
+      }
+
+      const data = await response.json();
+      const newSubtitles: SubtitleEntry[] = (data.segments || []).map((seg: any, i: number) => ({
+        id: `whisper-${Date.now()}-${i}`,
+        text: seg.text.trim(),
+        startTime: seg.start,
+        endTime: seg.end,
+      }));
+
+      setSubtitles((prev) => [...prev, ...newSubtitles]);
+      setProgressMsg(`完了！${newSubtitles.length}件の字幕を生成しました`);
+    } catch (e: any) {
+      const msg = e.message || "";
+      if (msg.includes("401")) {
+        setProgressMsg("APIキーが無効です。正しいキーを入力してください。");
+      } else {
+        setProgressMsg(`字幕生成に失敗しました: ${msg}`);
+      }
+    }
+    setProcessing(false);
+  };
+
   const handleBgmUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) setBgmFile(file);
@@ -1171,7 +1756,7 @@ export default function VideoEditor() {
     try {
       const item = BGM_CATEGORIES[catIdx].items[itemIdx];
       const isBgm = catIdx === 0;
-      const blob = await generateAudioBlob(item.freq, item.type, isBgm);
+      const blob = await generateAudioBlob(item.key);
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audio.loop = isBgm;
@@ -1188,8 +1773,7 @@ export default function VideoEditor() {
     setGeneratingBgm(`use-${catIdx}-${itemIdx}`);
     try {
       const item = BGM_CATEGORIES[catIdx].items[itemIdx];
-      const isBgm = catIdx === 0;
-      const blob = await generateAudioBlob(item.freq, item.type, isBgm);
+      const blob = await generateAudioBlob(item.key);
       const file = new File([blob], `${item.name}.wav`, { type: "audio/wav" });
       setBgmFile(file);
       setProgressMsg(`「${item.name}」をBGMに設定しました`);
@@ -1315,21 +1899,29 @@ export default function VideoEditor() {
         const animDur = 0.5;
         ctx.save();
 
-        let opacity = 1;
+        // Keyframe interpolation
+        const kfProps = interpolateKeyframes(overlay.keyframes || [], time);
+        const kfX = kfProps.x !== undefined ? kfProps.x : overlay.x;
+        const kfY = kfProps.y !== undefined ? kfProps.y : overlay.y;
+        const kfFontSize = kfProps.scale !== undefined ? overlay.fontSize * (kfProps.scale / 100) : (kfProps.fontSize !== undefined ? kfProps.fontSize : overlay.fontSize);
+        const kfOpacityBase = kfProps.opacity !== undefined ? kfProps.opacity / 100 : 1;
+        const kfRotation = kfProps.rotation !== undefined ? (kfProps.rotation * Math.PI) / 180 : 0;
+
+        let opacity = kfOpacityBase;
         let offsetX = 0;
         let offsetY = 0;
         let scale = 1;
-        let rotation = 0;
+        let rotation = kfRotation;
 
         switch (overlay.animation) {
           case "fade-in":
-            opacity = Math.min(1, elapsed / animDur);
+            opacity = kfOpacityBase * Math.min(1, elapsed / animDur);
             break;
           case "fade-out":
-            opacity = Math.min(1, remaining / animDur);
+            opacity = kfOpacityBase * Math.min(1, remaining / animDur);
             break;
           case "fade-in-out":
-            opacity = Math.min(Math.min(1, elapsed / animDur), Math.min(1, remaining / animDur));
+            opacity = kfOpacityBase * Math.min(Math.min(1, elapsed / animDur), Math.min(1, remaining / animDur));
             break;
           case "slide-left":
             offsetX = elapsed < animDur ? (1 - elapsed / animDur) * 100 : 0;
@@ -1359,10 +1951,10 @@ export default function VideoEditor() {
             break;
           }
           case "rotate-in":
-            rotation = elapsed < animDur ? (1 - elapsed / animDur) * (-Math.PI / 2) : 0;
+            rotation = kfRotation + (elapsed < animDur ? (1 - elapsed / animDur) * (-Math.PI / 2) : 0);
             break;
           case "blur-in":
-            opacity = Math.min(1, elapsed / animDur);
+            opacity = kfOpacityBase * Math.min(1, elapsed / animDur);
             break;
           case "shake":
             offsetX = Math.sin(time * 30) * 4;
@@ -1375,7 +1967,7 @@ export default function VideoEditor() {
             break;
           }
           case "flicker":
-            opacity = Math.random() > 0.1 ? 1 : 0.3;
+            opacity = kfOpacityBase * (Math.random() > 0.1 ? 1 : 0.3);
             break;
           default:
             break;
@@ -1383,12 +1975,12 @@ export default function VideoEditor() {
 
         ctx.globalAlpha = opacity;
 
-        const fontStyle = `${overlay.bold ? "bold" : ""} ${overlay.italic ? "italic" : ""} ${overlay.fontSize}px ${overlay.fontFamily}`.trim();
+        const fontStyle = `${overlay.bold ? "bold" : ""} ${overlay.italic ? "italic" : ""} ${Math.round(kfFontSize)}px ${overlay.fontFamily}`.trim();
         ctx.font = fontStyle;
         const metrics = ctx.measureText(overlay.text);
-        const textHeight = overlay.fontSize * 1.3;
-        const px = (overlay.x / 100) * canvas.width + offsetX;
-        const py = (overlay.y / 100) * canvas.height + offsetY;
+        const textHeight = kfFontSize * 1.3;
+        const px = (kfX / 100) * canvas.width + offsetX;
+        const py = (kfY / 100) * canvas.height + offsetY;
 
         if (overlay.animation === "wave" || overlay.animation === "rainbow" || overlay.animation === "typewriter") {
           // Character-by-character rendering
@@ -1449,9 +2041,9 @@ export default function VideoEditor() {
         if (draggingId === overlay.id) {
           ctx.setTransform(1,0,0,1,0,0);
           ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 2; ctx.setLineDash([4,2]);
-          const rpx = (overlay.x / 100) * canvas.width;
-          const rpy = (overlay.y / 100) * canvas.height;
-          ctx.strokeRect(rpx - 8, rpy - overlay.fontSize * 1.3, metrics.width + 16, overlay.fontSize * 1.5 + 8);
+          const rpx = (kfX / 100) * canvas.width;
+          const rpy = (kfY / 100) * canvas.height;
+          ctx.strokeRect(rpx - 8, rpy - kfFontSize * 1.3, metrics.width + 16, kfFontSize * 1.5 + 8);
           ctx.setLineDash([]);
         }
         ctx.restore();
@@ -1461,19 +2053,28 @@ export default function VideoEditor() {
       for (const sticker of stickers) {
         if (time < sticker.startTime || time > sticker.endTime) continue;
         ctx.save();
-        const baseX = (sticker.x / 100) * canvas.width;
-        const baseY = (sticker.y / 100) * canvas.height;
-        let offX = 0, offY = 0, sc = 1, extraRot = 0;
+
+        // Keyframe interpolation for sticker
+        const skfProps = interpolateKeyframes(sticker.keyframes || [], time);
+        const skfX = skfProps.x !== undefined ? skfProps.x : sticker.x;
+        const skfY = skfProps.y !== undefined ? skfProps.y : sticker.y;
+        const skfOpacity = skfProps.opacity !== undefined ? skfProps.opacity / 100 : sticker.opacity;
+        const skfRotation = skfProps.rotation !== undefined ? skfProps.rotation : sticker.rotation;
+        const skfScale = skfProps.scale !== undefined ? skfProps.scale / 100 : 1;
+
+        const baseX = (skfX / 100) * canvas.width;
+        const baseY = (skfY / 100) * canvas.height;
+        let offX = 0, offY = 0, sc = skfScale, extraRot = 0;
         const t = time;
         switch (sticker.animation) {
           case "bounce": offY = -Math.abs(Math.sin(t*3))*12; break;
-          case "pulse": sc = 1 + Math.sin(t*4)*0.15; break;
+          case "pulse": sc = skfScale * (1 + Math.sin(t*4)*0.15); break;
           case "spin": extraRot = (t*90)%360; break;
           case "float": offX = Math.sin(t*2)*6; offY = Math.cos(t*2)*4; break;
         }
-        ctx.globalAlpha = sticker.opacity;
+        ctx.globalAlpha = skfOpacity;
         ctx.translate(baseX + offX, baseY + offY);
-        ctx.rotate(((sticker.rotation + extraRot) * Math.PI) / 180);
+        ctx.rotate(((skfRotation + extraRot) * Math.PI) / 180);
         ctx.scale(sc, sc);
         ctx.font = `${sticker.size}px sans-serif`;
         ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -1526,6 +2127,7 @@ export default function VideoEditor() {
     { key: "transition", label: "トランジション", icon: "✨" },
     { key: "filter", label: "フィルター", icon: "🎨" },
     { key: "sticker", label: "スタンプ", icon: "😀" },
+    { key: "keyframe", label: "キーフレーム", icon: "◆" },
     { key: "mosaic", label: "モザイク", icon: "🔲" },
     { key: "chromakey", label: "クロマキー", icon: "🟩" },
     { key: "collage", label: "コラージュ", icon: "🖼" },
@@ -1903,11 +2505,94 @@ export default function VideoEditor() {
         {/* Subtitle */}
         {activeTool === "subtitle" && (
           <div className="space-y-4">
-            <h3 className="text-sm font-bold text-gray-200">音声字幕生成</h3>
-            <button onClick={isListening ? stopVoiceRecognition : startVoiceRecognition} className={`w-full py-3 rounded-xl text-sm font-bold transition-colors ${isListening ? "bg-red-600 text-white hover:bg-red-500 animate-pulse" : "bg-indigo-600 text-white hover:bg-indigo-500"}`}>
-              {isListening ? "⏹ 認識を停止" : "🎙 音声認識を開始"}
-            </button>
-            {isListening && <p className="text-xs text-red-400 text-center animate-pulse">認識中... 動画を再生して音声を拾っています</p>}
+            <div>
+              <h3 className="text-sm font-bold text-gray-200 mb-1">音声字幕生成</h3>
+              <p className="text-xs text-gray-500">字幕生成方式を選択:</p>
+            </div>
+            {/* Mode selector */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setSubtitleMode("browser")}
+                className={`p-3 rounded-xl border-2 text-left transition-all ${subtitleMode === "browser" ? "border-indigo-500 bg-indigo-900/30" : "border-gray-700 bg-gray-800 hover:border-gray-600"}`}
+              >
+                <div className="text-lg mb-1">🌐</div>
+                <div className="text-xs font-bold text-gray-200">ブラウザ音声認識</div>
+                <div className="text-[10px] text-gray-500 mt-0.5">無料・リアルタイム</div>
+                <div className="text-[10px] text-yellow-400 mt-0.5">精度: ★★★☆☆</div>
+              </button>
+              <button
+                onClick={() => setSubtitleMode("whisper")}
+                className={`p-3 rounded-xl border-2 text-left transition-all ${subtitleMode === "whisper" ? "border-purple-500 bg-purple-900/30" : "border-gray-700 bg-gray-800 hover:border-gray-600"}`}
+              >
+                <div className="text-lg mb-1">🤖</div>
+                <div className="text-xs font-bold text-gray-200">AI高精度(Whisper)</div>
+                <div className="text-[10px] text-gray-500 mt-0.5">高精度・自動タイムスタンプ</div>
+                <div className="text-[10px] text-green-400 mt-0.5">精度: ★★★★★</div>
+              </button>
+            </div>
+
+            {/* Browser mode */}
+            {subtitleMode === "browser" && (
+              <div className="space-y-3">
+                <button onClick={isListening ? stopVoiceRecognition : startVoiceRecognition} className={`w-full py-3 rounded-xl text-sm font-bold transition-colors ${isListening ? "bg-red-600 text-white hover:bg-red-500 animate-pulse" : "bg-indigo-600 text-white hover:bg-indigo-500"}`}>
+                  {isListening ? "⏹ 認識を停止" : "🎙 音声認識を開始"}
+                </button>
+                {isListening && <p className="text-xs text-red-400 text-center animate-pulse">認識中... 動画を再生して音声を拾っています</p>}
+              </div>
+            )}
+
+            {/* Whisper mode */}
+            {subtitleMode === "whisper" && (
+              <div className="space-y-3">
+                <div className="bg-gray-800 rounded-xl p-3 space-y-2">
+                  <label className="text-xs font-medium text-gray-300">OpenAI APIキー</label>
+                  <p className="text-[10px] text-gray-500">sk-で始まるキーを入力してください</p>
+                  {whisperKeySaved ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-1">
+                        <span className="text-xs text-green-400">✅ APIキー設定済み</span>
+                      </div>
+                      <button onClick={handleChangeWhisperKey} className="text-xs px-3 py-1.5 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors">変更</button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <div className="flex-1 relative">
+                          <input
+                            type={showWhisperKey ? "text" : "password"}
+                            value={whisperKeyInput}
+                            onChange={(e) => setWhisperKeyInput(e.target.value)}
+                            placeholder="sk-..."
+                            className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-xs text-white pr-8"
+                          />
+                          <button
+                            onClick={() => setShowWhisperKey((v) => !v)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-xs"
+                          >{showWhisperKey ? "🙈" : "👁"}</button>
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleSaveWhisperKey}
+                        disabled={!whisperKeyInput.trim()}
+                        className="w-full py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+                      >
+                        保存する
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={handleWhisperSubtitles}
+                  disabled={processing || !whisperApiKey || !videoFile}
+                  className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl text-sm font-bold hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 transition-all"
+                >
+                  {processing ? "処理中..." : "🤖 AI字幕を自動生成"}
+                </button>
+                {!videoFile && <p className="text-[10px] text-yellow-500 text-center">先に動画をアップロードしてください</p>}
+                {!whisperApiKey && videoFile && <p className="text-[10px] text-yellow-500 text-center">APIキーを設定してください</p>}
+              </div>
+            )}
+
             {subtitles.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -1934,39 +2619,43 @@ export default function VideoEditor() {
         {activeTool === "bgm" && (
           <div className="space-y-4">
             <h3 className="text-sm font-bold text-gray-200">BGM追加</h3>
+            {/* Category tabs */}
+            <div className="flex gap-1">
+              {BGM_CATEGORIES.map((cat, catIdx) => (
+                <button key={cat.name} onClick={() => setActiveBgmCategory(catIdx)}
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${activeBgmCategory === catIdx ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}>
+                  {catIdx === 0 ? "🎵 BGM" : "🔊 効果音"}
+                </button>
+              ))}
+            </div>
             {/* Library section */}
             <div>
-              <label className="text-xs text-gray-400 block mb-2">ライブラリから選択</label>
-              {BGM_CATEGORIES.map((cat, catIdx) => (
-                <div key={cat.name} className="mb-3">
-                  <p className="text-[10px] text-indigo-400 font-medium mb-1.5">{cat.name}</p>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {cat.items.map((item, itemIdx) => {
-                      const key = `${catIdx}-${itemIdx}`;
-                      const isPreviewing = previewingBgmIdx === key;
-                      const isGenerating = generatingBgm === key || generatingBgm === `use-${catIdx}-${itemIdx}`;
-                      return (
-                        <div key={item.name} className="bg-gray-800 rounded-xl p-2 flex items-center justify-between gap-1">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[10px] font-medium text-gray-300 truncate">{item.name}</p>
-                            <p className="text-[9px] text-gray-500 truncate">{item.desc}</p>
-                          </div>
-                          <div className="flex gap-1">
-                            <button onClick={() => handlePreviewBgmLibrary(catIdx, itemIdx)} disabled={!!isGenerating}
-                              className={`w-7 h-7 rounded-lg text-xs flex items-center justify-center transition-colors ${isPreviewing ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"} ${isGenerating ? "opacity-50" : ""}`}>
-                              {isGenerating ? "..." : isPreviewing ? "⏹" : "▶"}
-                            </button>
-                            <button onClick={() => handleUseBgmLibrary(catIdx, itemIdx)} disabled={!!isGenerating}
-                              className="w-7 h-7 bg-green-800 text-green-300 rounded-lg text-[9px] flex items-center justify-center hover:bg-green-700 disabled:opacity-50">
-                              使用
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+              <div className="space-y-1.5">
+                {BGM_CATEGORIES[activeBgmCategory].items.map((item, itemIdx) => {
+                  const key = `${activeBgmCategory}-${itemIdx}`;
+                  const isPreviewing = previewingBgmIdx === key;
+                  const isGenerating = generatingBgm === key || generatingBgm === `use-${activeBgmCategory}-${itemIdx}`;
+                  return (
+                    <div key={item.name} className="bg-gray-800 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-200 truncate">{item.name}</p>
+                        <p className="text-[9px] text-gray-500 truncate">{item.desc}</p>
+                        <p className="text-[9px] text-indigo-400">{item.duration}</p>
+                      </div>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <button onClick={() => handlePreviewBgmLibrary(activeBgmCategory, itemIdx)} disabled={!!isGenerating}
+                          className={`w-8 h-8 rounded-lg text-xs flex items-center justify-center transition-colors ${isPreviewing ? "bg-indigo-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"} ${isGenerating ? "opacity-50" : ""}`}>
+                          {isGenerating ? "…" : isPreviewing ? "⏹" : "▶"}
+                        </button>
+                        <button onClick={() => handleUseBgmLibrary(activeBgmCategory, itemIdx)} disabled={!!isGenerating}
+                          className="px-2 h-8 bg-green-800 text-green-300 rounded-lg text-[10px] font-medium flex items-center justify-center hover:bg-green-700 disabled:opacity-50 transition-colors">
+                          使用
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
             <div className="border-t border-gray-800 pt-3">
               <label className="text-xs text-gray-400 block mb-2">または自分のファイルを選択</label>
@@ -2214,6 +2903,250 @@ export default function VideoEditor() {
             )}
           </div>
         )}
+        {/* Keyframe */}
+        {activeTool === "keyframe" && (() => {
+          const allTargets: { id: string; label: string; type: "text" | "sticker" }[] = [
+            ...textOverlays.map((o) => ({ id: o.id, label: `T: ${o.text.slice(0, 14)}${o.text.length > 14 ? "…" : ""}`, type: "text" as const })),
+            ...stickers.map((s) => ({ id: s.id, label: `${s.emoji} スタンプ`, type: "sticker" as const })),
+          ];
+
+          const getTarget = (id: string | null) => {
+            if (!id) return null;
+            const txt = textOverlays.find((o) => o.id === id);
+            if (txt) return { obj: txt, type: "text" as const };
+            const stk = stickers.find((s) => s.id === id);
+            if (stk) return { obj: stk, type: "sticker" as const };
+            return null;
+          };
+
+          const target = getTarget(selectedKeyframeTarget);
+          const targetKeyframes: Keyframe[] = target ? (target.obj.keyframes || []) : [];
+          const selectedKf = targetKeyframes.find((k) => k.id === selectedKeyframeId) ?? null;
+
+          const updateTargetKeyframes = (id: string, kfs: Keyframe[]) => {
+            const txt = textOverlays.find((o) => o.id === id);
+            if (txt) { updateTextOverlay(id, { keyframes: kfs }); return; }
+            const stk = stickers.find((s) => s.id === id);
+            if (stk) { updateSticker(id, { keyframes: kfs }); }
+          };
+
+          const addKeyframeAtCurrentTime = () => {
+            if (!selectedKeyframeTarget || !target) return;
+            const newKf: Keyframe = {
+              id: `kf-${Date.now()}`,
+              time: currentTime,
+              properties: {
+                x: target.obj.x,
+                y: target.obj.y,
+                opacity: target.type === "sticker" ? Math.round((target.obj as StickerOverlay).opacity * 100) : 100,
+                scale: 100,
+                rotation: target.type === "sticker" ? (target.obj as StickerOverlay).rotation : 0,
+              },
+            };
+            const newKfs = [...targetKeyframes, newKf].sort((a, b) => a.time - b.time);
+            updateTargetKeyframes(selectedKeyframeTarget, newKfs);
+            setSelectedKeyframeId(newKf.id);
+          };
+
+          const deleteSelectedKeyframe = () => {
+            if (!selectedKeyframeTarget || !selectedKeyframeId) return;
+            const newKfs = targetKeyframes.filter((k) => k.id !== selectedKeyframeId);
+            updateTargetKeyframes(selectedKeyframeTarget, newKfs);
+            setSelectedKeyframeId(null);
+          };
+
+          const updateSelectedKfProp = (prop: keyof KeyframeProperties, value: number) => {
+            if (!selectedKeyframeTarget || !selectedKeyframeId) return;
+            const newKfs = targetKeyframes.map((k) => k.id === selectedKeyframeId ? { ...k, properties: { ...k.properties, [prop]: value } } : k);
+            updateTargetKeyframes(selectedKeyframeTarget, newKfs);
+          };
+
+          const applyPreset = (preset: { name: string; keyframes: { offsetRatio: number; props: KeyframeProperties }[] }) => {
+            if (!selectedKeyframeTarget || !target) return;
+            const startT = target.obj.startTime;
+            const endT = target.obj.endTime;
+            const dur = endT - startT;
+            const newKfs: Keyframe[] = preset.keyframes.map((kfDef, i) => ({
+              id: `kf-preset-${Date.now()}-${i}`,
+              time: startT + kfDef.offsetRatio * dur,
+              properties: kfDef.props,
+            }));
+            updateTargetKeyframes(selectedKeyframeTarget, newKfs);
+            setSelectedKeyframeId(null);
+          };
+
+          const PRESETS = [
+            { name: "左→右に移動", keyframes: [{ offsetRatio: 0, props: { x: 0, y: 50 } }, { offsetRatio: 1, props: { x: 100, y: 50 } }] },
+            { name: "右→左に移動", keyframes: [{ offsetRatio: 0, props: { x: 100, y: 50 } }, { offsetRatio: 1, props: { x: 0, y: 50 } }] },
+            { name: "上→下に移動", keyframes: [{ offsetRatio: 0, props: { x: 50, y: 0 } }, { offsetRatio: 1, props: { x: 50, y: 100 } }] },
+            { name: "ズームイン", keyframes: [{ offsetRatio: 0, props: { scale: 50 } }, { offsetRatio: 1, props: { scale: 100 } }] },
+            { name: "ズームアウト", keyframes: [{ offsetRatio: 0, props: { scale: 100 } }, { offsetRatio: 1, props: { scale: 50 } }] },
+            { name: "回転", keyframes: [{ offsetRatio: 0, props: { rotation: 0 } }, { offsetRatio: 1, props: { rotation: 360 } }] },
+            { name: "フェードイン→アウト", keyframes: [{ offsetRatio: 0, props: { opacity: 0 } }, { offsetRatio: 0.5, props: { opacity: 100 } }, { offsetRatio: 1, props: { opacity: 0 } }] },
+            { name: "バウンス移動", keyframes: [{ offsetRatio: 0, props: { y: 20 } }, { offsetRatio: 0.25, props: { y: 80 } }, { offsetRatio: 0.5, props: { y: 30 } }, { offsetRatio: 0.75, props: { y: 70 } }, { offsetRatio: 1, props: { y: 50 } }] },
+          ];
+
+          const startT = target?.obj.startTime ?? 0;
+          const endT = target?.obj.endTime ?? duration;
+          const segDur = Math.max(0.01, endT - startT);
+
+          return (
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-gray-200">キーフレームアニメーション</h3>
+              <p className="text-xs text-gray-500">テキストやスタンプの位置・スケール・透明度などを時間ごとに変化させます</p>
+
+              {/* Target selector */}
+              <div>
+                <label className="text-[10px] text-gray-500 block mb-1">アニメーション対象</label>
+                {allTargets.length === 0 ? (
+                  <p className="text-xs text-gray-600 py-3 text-center">テロップかスタンプを先に追加してください</p>
+                ) : (
+                  <select
+                    value={selectedKeyframeTarget ?? ""}
+                    onChange={(e) => { setSelectedKeyframeTarget(e.target.value || null); setSelectedKeyframeId(null); }}
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white"
+                  >
+                    <option value="">-- 対象を選択 --</option>
+                    {allTargets.map((t) => (
+                      <option key={t.id} value={t.id}>{t.label}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {selectedKeyframeTarget && target && (
+                <>
+                  {/* Timeline visualization */}
+                  <div className="bg-gray-800 rounded-xl p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-gray-500">タイムライン ({formatTime(startT)} - {formatTime(endT)})</span>
+                      <button
+                        onClick={addKeyframeAtCurrentTime}
+                        className="text-xs px-3 py-1 bg-indigo-600 rounded-lg text-white hover:bg-indigo-500 font-medium"
+                      >
+                        ◆ キーフレーム追加
+                      </button>
+                    </div>
+                    {/* Timeline bar */}
+                    <div className="relative h-6 bg-gray-700 rounded-lg overflow-visible">
+                      {/* Current time indicator */}
+                      {currentTime >= startT && currentTime <= endT && (
+                        <div
+                          className="absolute top-0 bottom-0 w-0.5 bg-red-400 z-10"
+                          style={{ left: `${Math.min(100, Math.max(0, ((currentTime - startT) / segDur) * 100))}%` }}
+                        />
+                      )}
+                      {/* Keyframe diamonds */}
+                      {targetKeyframes.map((kf) => {
+                        const pct = Math.min(100, Math.max(0, ((kf.time - startT) / segDur) * 100));
+                        const isSelected = kf.id === selectedKeyframeId;
+                        return (
+                          <button
+                            key={kf.id}
+                            onClick={() => setSelectedKeyframeId(kf.id === selectedKeyframeId ? null : kf.id)}
+                            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 text-xs leading-none transition-all z-20"
+                            style={{ left: `${pct}%`, color: isSelected ? "#fbbf24" : "#6366f1", fontSize: "14px" }}
+                            title={`${formatTime(kf.time)}`}
+                          >
+                            ◆
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {targetKeyframes.length === 0 && (
+                      <p className="text-[10px] text-gray-600 text-center">キーフレームがありません。「追加」ボタンで追加してください</p>
+                    )}
+                    {targetKeyframes.length > 0 && (
+                      <p className="text-[10px] text-gray-500">{targetKeyframes.length}個のキーフレーム　◆をクリックで選択・編集</p>
+                    )}
+                  </div>
+
+                  {/* Keyframe property editor */}
+                  {selectedKf && (
+                    <div className="bg-gray-800 border border-indigo-700 rounded-xl p-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-indigo-300">◆ {formatTime(selectedKf.time)} のキーフレーム</span>
+                        <button onClick={deleteSelectedKeyframe} className="text-xs text-red-400 hover:text-red-300">削除</button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] text-gray-500 block mb-1">X位置 ({selectedKf.properties.x ?? "—"}%)</label>
+                          <input type="range" min={0} max={100}
+                            value={selectedKf.properties.x ?? 50}
+                            onChange={(e) => updateSelectedKfProp("x", parseInt(e.target.value))}
+                            className="w-full" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-gray-500 block mb-1">Y位置 ({selectedKf.properties.y ?? "—"}%)</label>
+                          <input type="range" min={0} max={100}
+                            value={selectedKf.properties.y ?? 50}
+                            onChange={(e) => updateSelectedKfProp("y", parseInt(e.target.value))}
+                            className="w-full" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-500 block mb-1">スケール ({selectedKf.properties.scale ?? "—"}%)</label>
+                        <input type="range" min={10} max={300}
+                          value={selectedKf.properties.scale ?? 100}
+                          onChange={(e) => updateSelectedKfProp("scale", parseInt(e.target.value))}
+                          className="w-full" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-500 block mb-1">不透明度 ({selectedKf.properties.opacity ?? "—"}%)</label>
+                        <input type="range" min={0} max={100}
+                          value={selectedKf.properties.opacity ?? 100}
+                          onChange={(e) => updateSelectedKfProp("opacity", parseInt(e.target.value))}
+                          className="w-full" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-500 block mb-1">回転 ({selectedKf.properties.rotation ?? "—"}°)</label>
+                        <input type="range" min={0} max={360}
+                          value={selectedKf.properties.rotation ?? 0}
+                          onChange={(e) => updateSelectedKfProp("rotation", parseInt(e.target.value))}
+                          className="w-full" />
+                      </div>
+                      {targetKeyframes.length > 0 && (
+                        <button
+                          onClick={() => { updateTargetKeyframes(selectedKeyframeTarget, []); setSelectedKeyframeId(null); }}
+                          className="w-full py-2 bg-gray-700 text-gray-300 rounded-lg text-xs hover:bg-gray-600 transition-colors"
+                        >
+                          全キーフレームをクリア
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Preset animations */}
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-2">プリセットアニメーション（ワンタップ適用）</label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {PRESETS.map((preset) => (
+                        <button
+                          key={preset.name}
+                          onClick={() => applyPreset(preset)}
+                          className="py-2 px-2 bg-gray-800 border border-gray-700 rounded-xl text-[11px] text-gray-300 hover:bg-indigo-600/20 hover:border-indigo-500 hover:text-indigo-300 transition-all text-left"
+                        >
+                          {preset.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Clear all keyframes for this target */}
+                  {targetKeyframes.length > 0 && !selectedKf && (
+                    <button
+                      onClick={() => { updateTargetKeyframes(selectedKeyframeTarget, []); setSelectedKeyframeId(null); }}
+                      className="w-full py-2 bg-gray-800 text-gray-400 rounded-xl text-xs hover:bg-gray-700 transition-colors"
+                    >
+                      全キーフレームをクリア
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Mosaic */}
         {activeTool === "mosaic" && (
           <div className="space-y-4">

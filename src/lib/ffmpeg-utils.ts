@@ -887,6 +887,26 @@ export interface ChromaKeyInput {
   blend: number; // 0-1
 }
 
+// ===== AUDIO EXTRACTION FOR WHISPER =====
+export async function extractAudio(file: File, onProgress?: (msg: string) => void): Promise<Blob> {
+  const ff = await getFFmpeg();
+  await ff.writeFile("input", await fetchFile(file));
+  onProgress?.("音声を抽出中...");
+  await ff.exec([
+    "-i", "input",
+    "-vn",
+    "-acodec", "pcm_s16le",
+    "-ar", "16000",
+    "-ac", "1",
+    "audio.wav"
+  ]);
+  const result = await ff.readFile("audio.wav");
+  const blob = new Blob([new Uint8Array(result as Uint8Array)], { type: "audio/wav" });
+  await ff.deleteFile("input");
+  await ff.deleteFile("audio.wav");
+  return blob;
+}
+
 export async function applyChromaKey(
   input: ChromaKeyInput,
   onProgress?: (msg: string) => void

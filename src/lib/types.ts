@@ -4,6 +4,21 @@ export type TextAnimation =
   | "bounce-in" | "scale-up" | "scale-down" | "rotate-in"
   | "blur-in" | "shake" | "wave" | "rainbow" | "glow" | "flicker" | "zoom-in";
 
+export interface KeyframeProperties {
+  x?: number;
+  y?: number;
+  fontSize?: number;
+  opacity?: number;
+  rotation?: number;
+  scale?: number;
+}
+
+export interface Keyframe {
+  id: string;
+  time: number; // absolute time in seconds
+  properties: KeyframeProperties;
+}
+
 export interface TextOverlay {
   id: string;
   text: string;
@@ -24,6 +39,7 @@ export interface TextOverlay {
   shadowOffsetX: number;
   shadowOffsetY: number;
   animation: TextAnimation;
+  keyframes: Keyframe[];
 }
 
 export const FONT_OPTIONS = [
@@ -61,7 +77,7 @@ export const ASPECT_PRESETS: AspectRatioPreset[] = [
   { label: "Instagram広告", platform: "Instagram", ratio: "4:5", width: 1080, height: 1350 },
 ];
 
-export type EditorTool = "select" | "text" | "trim" | "silence" | "bgm" | "subtitle" | "export" | "speed" | "split" | "filter" | "transition" | "sticker" | "collage" | "slideshow" | "pip" | "mosaic" | "chromakey" | "template";
+export type EditorTool = "select" | "text" | "trim" | "silence" | "bgm" | "subtitle" | "export" | "speed" | "split" | "filter" | "transition" | "sticker" | "keyframe" | "collage" | "slideshow" | "pip" | "mosaic" | "chromakey" | "template";
 
 export interface VideoTemplate {
   id: string;
@@ -136,6 +152,7 @@ export interface StickerOverlay {
   endTime: number;
   opacity: number; // 0-1
   animation: "none" | "bounce" | "pulse" | "spin" | "float";
+  keyframes: Keyframe[];
 }
 
 export interface ClipMarker {
