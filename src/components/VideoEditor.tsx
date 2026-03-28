@@ -3447,6 +3447,53 @@ ${buildClinicContext(clinicProfile)}`
                 </div>
               ))}
             </div>
+            {/* バズ動画テンプレート */}
+            <div className="border-t border-gray-700 pt-4 mt-4">
+              <ViralTemplateGallery
+                clinicProfile={clinicProfile}
+                onUseTemplate={(template) => {
+                  // テンプレートのスクリプト構成をテロップとして適用
+                  const startT = currentTime;
+                  let accTime = startT;
+                  const newTexts: TextOverlay[] = template.scriptStructure.map((seg, i) => ({
+                    id: `viral-${Date.now()}-${i}`,
+                    text: seg.text.replace(/\{院名\}/g, clinicProfile?.clinicName || "{院名}").replace(/\{先生名\}/g, clinicProfile?.clinicName?.replace(/整体院|治療院|鍼灸院|接骨院|整骨院/g, "").trim() || "{先生名}").replace(/\{症状\}/g, clinicProfile?.specialties?.[0] || "{症状}").replace(/\{地域\}/g, clinicProfile?.area || "{地域}"),
+                    x: 50,
+                    y: seg.type === "hook" ? 50 : seg.type === "cta" ? 85 : 80,
+                    fontSize: seg.type === "hook" ? 36 : seg.type === "cta" ? 28 : 24,
+                    fontFamily: "sans-serif",
+                    color: seg.type === "hook" ? "#ffff00" : seg.type === "cta" ? "#00ff00" : "#ffffff",
+                    bgColor: seg.type === "hook" ? "transparent" : "rgba(0,0,0,0.7)",
+                    startTime: accTime,
+                    endTime: (accTime += seg.duration),
+                    bold: seg.type === "hook" || seg.type === "cta",
+                    italic: false,
+                    outlineColor: "#000000",
+                    outlineWidth: seg.type === "hook" ? 4 : 2,
+                    shadowColor: seg.type === "hook" ? "rgba(0,0,0,0.8)" : "transparent",
+                    shadowBlur: seg.type === "hook" ? 8 : 0,
+                    shadowOffsetX: 0,
+                    shadowOffsetY: 0,
+                    animation: (seg.type === "hook" ? "bounce-in" : seg.type === "cta" ? "slide-up" : "fade-in") as TextAnimation,
+                    keyframes: [],
+                  }));
+                  setTextOverlays((prev) => [...prev, ...newTexts]);
+                  // Set aspect ratio
+                  if (template.aspectRatio === "9:16") setSelectedPresetIdx(1);
+                  else setSelectedPresetIdx(0);
+                  setTemplateSuccessMsg(`バズテンプレ「${template.name}」を適用（${newTexts.length}個のテロップ）`);
+                  setTimeout(() => setTemplateSuccessMsg(null), 3000);
+                  setActiveTool("text");
+                  if (newTexts.length > 0) setEditingTextId(newTexts[0].id);
+                }}
+                onGenerateScript={(template) => {
+                  // AI台本生成タブに切り替えてテーマを自動設定
+                  setScriptTopic(template.name);
+                  setScriptPlatform(template.platform === "youtube" ? "youtube" : "reels");
+                  setActiveTool("script");
+                }}
+              />
+            </div>
           </div>
         )}
 
@@ -3594,6 +3641,54 @@ ${buildClinicContext(clinicProfile)}`
               <h3 className="text-sm font-bold text-gray-200">テロップ追加</h3>
               <button onClick={addTextOverlay} className="text-xs px-3 py-1.5 bg-indigo-600 rounded-lg text-white hover:bg-indigo-500">+ 追加</button>
             </div>
+            {/* 治療院向けテロッププリセット */}
+            <div className="space-y-2">
+              <p className="text-[10px] text-gray-500 font-medium">治療院プリセット</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {([
+                  { label: "⚠️ 法的注意", text: "※効果には個人差があります。\n施術内容・費用・リスクについては\n概要欄をご確認ください。", style: { fontSize: 16, color: "#ffffff", bgColor: "rgba(0,0,0,0.8)", outlineWidth: 0, bold: false, x: 50, y: 92 } },
+                  { label: "📞 予約誘導", text: clinicProfile?.clinicName ? `${clinicProfile.clinicName}へのご予約は\nプロフィールのリンクから` : "ご予約はプロフィールのリンクから", style: { fontSize: 24, color: "#ffffff", bgColor: "rgba(99,102,241,0.9)", outlineWidth: 0, bold: true, x: 50, y: 85 } },
+                  { label: "💬 LINE誘導", text: "LINE友だち追加で\n初回限定クーポンプレゼント!", style: { fontSize: 22, color: "#ffffff", bgColor: "rgba(6,199,85,0.9)", outlineWidth: 0, bold: true, x: 50, y: 85 } },
+                  { label: "🔔 登録促進", text: "チャンネル登録お願いします!\n通知ONで新着を見逃さない", style: { fontSize: 24, color: "#ffffff", bgColor: "rgba(255,0,0,0.9)", outlineWidth: 0, bold: true, x: 50, y: 50 } },
+                  { label: "🏥 院名表示", text: clinicProfile?.clinicName || "{院名}", style: { fontSize: 20, color: "#ffffff", bgColor: "rgba(0,0,0,0.6)", outlineWidth: 0, bold: false, x: 10, y: 95 } },
+                  { label: "📍 地域名", text: clinicProfile?.area ? `📍 ${clinicProfile.area}` : "📍 {地域}", style: { fontSize: 18, color: "#ffffff", bgColor: "rgba(0,0,0,0.5)", outlineWidth: 0, bold: false, x: 10, y: 10 } },
+                ] as { label: string; text: string; style: Partial<TextOverlay> }[]).map((preset) => (
+                  <button
+                    key={preset.label}
+                    onClick={() => {
+                      const id = `text-preset-${Date.now()}`;
+                      const newOverlay: TextOverlay = {
+                        id,
+                        text: preset.text,
+                        x: preset.style.x ?? 50,
+                        y: preset.style.y ?? 50,
+                        fontSize: preset.style.fontSize ?? 24,
+                        fontFamily: "sans-serif",
+                        color: preset.style.color ?? "#ffffff",
+                        bgColor: preset.style.bgColor ?? "transparent",
+                        startTime: currentTime,
+                        endTime: Math.min(currentTime + 5, duration || currentTime + 5),
+                        bold: preset.style.bold ?? false,
+                        italic: false,
+                        outlineColor: "#000000",
+                        outlineWidth: preset.style.outlineWidth ?? 0,
+                        shadowColor: "transparent",
+                        shadowBlur: 0,
+                        shadowOffsetX: 0,
+                        shadowOffsetY: 0,
+                        animation: "fade-in" as TextAnimation,
+                        keyframes: [],
+                      };
+                      setTextOverlays((prev) => [...prev, newOverlay]);
+                      setEditingTextId(id);
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-800 border border-gray-700 rounded-lg text-[11px] text-gray-300 hover:bg-gray-700 hover:border-gray-600 transition-all text-left"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             {textOverlays.length === 0 && <p className="text-xs text-gray-500 text-center py-6">「+ 追加」でテロップを配置できます<br/><span className="text-indigo-400">キャンバス上でドラッグ移動も可能です</span></p>}
             {textOverlays.map((overlay) => (
               <div key={overlay.id} className={`p-3 rounded-xl border transition-colors ${editingTextId === overlay.id ? "border-indigo-500 bg-gray-800" : "border-gray-700 bg-gray-800/50"}`}>
@@ -3688,6 +3783,10 @@ ${buildClinicContext(clinicProfile)}`
                         <button onClick={() => updateTextOverlay(overlay.id, { color:"#ffffff",bgColor:"transparent",outlineColor:"#000000",outlineWidth:4,shadowBlur:0 })} className="px-1 py-2 bg-gray-800 rounded text-[10px] text-white hover:bg-gray-700">縁取り</button>
                         <button onClick={() => updateTextOverlay(overlay.id, { color:"#ffff00",bgColor:"transparent",outlineColor:"#000000",outlineWidth:3,shadowBlur:8,shadowColor:"#000000" })} className="px-1 py-2 bg-gray-800 rounded text-[10px] text-yellow-300 hover:bg-gray-700">YouTube風</button>
                         <button onClick={() => updateTextOverlay(overlay.id, { color:"#ff3366",bgColor:"transparent",outlineColor:"#ffffff",outlineWidth:3,shadowBlur:12,shadowColor:"#ff336680" })} className="px-1 py-2 bg-gray-800 rounded text-[10px] text-pink-400 hover:bg-gray-700">ネオン</button>
+                        <button onClick={() => updateTextOverlay(overlay.id, { color:"#ffffff",bgColor:"transparent",outlineColor:"#000000",outlineWidth:3,shadowBlur:0,shadowColor:"transparent" })} className="px-1 py-2 bg-gray-800 rounded text-[10px] text-white hover:bg-gray-700" style={{textShadow:"1px 1px 0 #000, -1px -1px 0 #000"}}>白縁取り</button>
+                        <button onClick={() => updateTextOverlay(overlay.id, { color:"#ffffff",bgColor:"rgba(255,0,0,0.85)",outlineWidth:0,shadowBlur:0,shadowColor:"transparent" })} className="px-1 py-2 bg-red-600 rounded text-[10px] text-white hover:bg-red-500">警告赤</button>
+                        <button onClick={() => updateTextOverlay(overlay.id, { color:"#000000",bgColor:"rgba(255,255,0,0.9)",outlineWidth:0,shadowBlur:0,shadowColor:"transparent" })} className="px-1 py-2 bg-yellow-400 rounded text-[10px] text-black hover:bg-yellow-300">注目黄色</button>
+                        <button onClick={() => updateTextOverlay(overlay.id, { color:"#ffffff",bgColor:"rgba(99,102,241,0.85)",outlineWidth:0,shadowBlur:0,shadowColor:"transparent" })} className="px-1 py-2 bg-indigo-500 rounded text-[10px] text-white hover:bg-indigo-400">CTA紫</button>
                       </div>
                     </div>
                     {/* Animation Section */}
