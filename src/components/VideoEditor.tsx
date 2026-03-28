@@ -999,6 +999,8 @@ export default function VideoEditor() {
   const [thumbnailText, setThumbnailText] = useState("");
   const [thumbnailTemplate, setThumbnailTemplate] = useState(0);
   const [thumbnailGenerating, setThumbnailGenerating] = useState(false);
+  const [thumbnailSubText, setThumbnailSubText] = useState("");
+  const [thumbnailColorScheme, setThumbnailColorScheme] = useState({ label: "赤×白", main: "#ff0000", sub: "#ffffff", bg: "rgba(0,0,0,0.7)" });
 
   // ===== SNS CAPTION =====
   const [captionPlatform, setCaptionPlatform] = useState<"Instagram" | "YouTube" | "TikTok">("YouTube");
@@ -1720,54 +1722,284 @@ export default function VideoEditor() {
   };
 
   const applyThumbnailText = (ctx: CanvasRenderingContext2D, thumbCanvas: HTMLCanvasElement) => {
-    if (thumbnailText) {
+    const mainColor = thumbnailColorScheme.main;
+    const subColor = thumbnailColorScheme.sub;
+    const bgColor = thumbnailColorScheme.bg;
+    const mainText = thumbnailText;
+    const subText = thumbnailSubText;
+    const clinicName = clinicProfile?.clinicName || "";
+
+    if (mainText || subText) {
+      ctx.save();
+
       if (thumbnailTemplate === 0) {
-        // Big text center with red outline (YouTube style)
-        ctx.save();
-        ctx.font = "bold 96px 'Arial Black', Impact, sans-serif";
+        // YouTube風: 大文字中央 + 赤縁取り
+        ctx.font = "bold 88px 'Arial Black', Impact, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.strokeStyle = "#ff0000";
+        ctx.strokeStyle = mainColor;
         ctx.lineWidth = 8;
-        ctx.strokeText(thumbnailText, 640, 360);
-        ctx.fillStyle = "#ffffff";
-        ctx.fillText(thumbnailText, 640, 360);
-        ctx.restore();
+        if (mainText) {
+          ctx.strokeText(mainText, 640, 340);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(mainText, 640, 340);
+        }
+        if (subText) {
+          ctx.font = "bold 36px sans-serif";
+          ctx.fillStyle = subColor;
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = 4;
+          ctx.strokeText(subText, 640, 440);
+          ctx.fillText(subText, 640, 440);
+        }
       } else if (thumbnailTemplate === 1) {
-        // Text at bottom with gradient overlay
-        ctx.save();
-        const grad = ctx.createLinearGradient(0, 540, 0, 720);
+        // 下部グラデーション
+        const grad = ctx.createLinearGradient(0, 480, 0, 720);
         grad.addColorStop(0, "rgba(0,0,0,0)");
-        grad.addColorStop(1, "rgba(0,0,0,0.85)");
+        grad.addColorStop(1, "rgba(0,0,0,0.9)");
         ctx.fillStyle = grad;
-        ctx.fillRect(0, 540, 1280, 180);
-        ctx.font = "bold 72px sans-serif";
+        ctx.fillRect(0, 480, 1280, 240);
+        ctx.font = "bold 64px sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "bottom";
         ctx.fillStyle = "#ffffff";
-        ctx.fillText(thumbnailText, 640, 700);
-        ctx.restore();
-      } else {
-        // Split text: left "Before" style, right "After"
-        ctx.save();
-        const parts = thumbnailText.split(/\s+/);
-        const leftText = parts.slice(0, Math.ceil(parts.length / 2)).join(" ");
-        const rightText = parts.slice(Math.ceil(parts.length / 2)).join(" ");
-        ctx.font = "bold 64px sans-serif";
-        ctx.textBaseline = "middle";
-        ctx.strokeStyle = "#000000";
-        ctx.lineWidth = 6;
-        ctx.textAlign = "left";
-        ctx.strokeText(leftText, 40, 360);
+        if (mainText) ctx.fillText(mainText, 640, 680);
+        if (subText) {
+          ctx.font = "28px sans-serif";
+          ctx.fillStyle = "rgba(255,255,255,0.8)";
+          ctx.fillText(subText, 640, 710);
+        }
+      } else if (thumbnailTemplate === 2) {
+        // ビフォーアフター左右分割
+        ctx.fillStyle = "rgba(255,255,255,0.95)";
+        ctx.fillRect(635, 0, 10, 720);
+        // Before badge
         ctx.fillStyle = "#ff0000";
-        ctx.fillText(leftText, 40, 360);
-        ctx.textAlign = "right";
-        ctx.strokeText(rightText, 1240, 360);
+        ctx.beginPath();
+        ctx.roundRect(40, 30, 200, 50, 8);
+        ctx.fill();
+        ctx.font = "bold 28px sans-serif";
+        ctx.textAlign = "center";
         ctx.fillStyle = "#ffffff";
-        ctx.fillText(rightText, 1240, 360);
+        ctx.fillText("Before", 140, 62);
+        // After badge
+        ctx.fillStyle = "#00cc00";
+        ctx.beginPath();
+        ctx.roundRect(1040, 30, 200, 50, 8);
+        ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText("After", 1140, 62);
+        // Main text at bottom
+        if (mainText) {
+          ctx.font = "bold 48px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillStyle = mainColor;
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = 5;
+          ctx.strokeText(mainText, 640, 680);
+          ctx.fillText(mainText, 640, 680);
+        }
+      } else if (thumbnailTemplate === 3) {
+        // 警告・NG系: 赤バナー
+        ctx.fillStyle = "rgba(220,0,0,0.9)";
+        ctx.fillRect(0, 0, 1280, 100);
+        ctx.font = "bold 52px 'Arial Black', Impact, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText("\u26A0\uFE0F やってはいけない", 640, 50);
+        if (mainText) {
+          ctx.font = "bold 80px sans-serif";
+          ctx.strokeStyle = "#ff0000";
+          ctx.lineWidth = 6;
+          ctx.strokeText(mainText, 640, 400);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(mainText, 640, 400);
+        }
+        // Big X mark
+        ctx.strokeStyle = "rgba(255,0,0,0.5)";
+        ctx.lineWidth = 30;
+        ctx.beginPath();
+        ctx.moveTo(200, 200);
+        ctx.lineTo(1080, 600);
+        ctx.moveTo(1080, 200);
+        ctx.lineTo(200, 600);
+        ctx.stroke();
+      } else if (thumbnailTemplate === 4) {
+        // ランキング: 数字大きく
+        ctx.fillStyle = "rgba(0,0,0,0.6)";
+        ctx.fillRect(0, 0, 1280, 720);
+        ctx.font = "bold 200px 'Arial Black', Impact, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = mainColor;
+        ctx.globalAlpha = 0.3;
+        ctx.fillText("TOP5", 640, 300);
+        ctx.globalAlpha = 1;
+        if (mainText) {
+          ctx.font = "bold 64px sans-serif";
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = 5;
+          ctx.strokeText(mainText, 640, 520);
+          ctx.fillText(mainText, 640, 520);
+        }
+        if (subText) {
+          ctx.font = "32px sans-serif";
+          ctx.fillStyle = "rgba(255,255,255,0.8)";
+          ctx.fillText(subText, 640, 600);
+        }
+      } else if (thumbnailTemplate === 5) {
+        // セルフケア: 手順表示
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 550, 1280, 170);
+        ctx.font = "bold 56px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillStyle = mainColor;
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = 5;
+        if (mainText) {
+          ctx.strokeText(mainText, 640, 620);
+          ctx.fillText(mainText, 640, 620);
+        }
+        if (subText) {
+          ctx.font = "28px sans-serif";
+          ctx.fillStyle = subColor;
+          ctx.strokeText(subText, 640, 680);
+          ctx.fillText(subText, 640, 680);
+        }
+        // Step badge
+        ctx.fillStyle = mainColor;
+        ctx.beginPath();
+        ctx.arc(100, 100, 50, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = "bold 40px sans-serif";
+        ctx.fillStyle = "#ffffff";
+        ctx.textBaseline = "middle";
+        ctx.fillText("\u270B", 100, 100);
+      } else if (thumbnailTemplate === 6) {
+        // 患者の声: 星評価付き
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(0, 0, 1280, 720);
+        // Stars
+        ctx.font = "60px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("\u2B50\u2B50\u2B50\u2B50\u2B50", 640, 200);
+        // Quote
+        if (mainText) {
+          ctx.font = "bold 56px sans-serif";
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = 4;
+          ctx.strokeText(`\u300C${mainText}\u300D`, 640, 380);
+          ctx.fillText(`\u300C${mainText}\u300D`, 640, 380);
+        }
+        if (subText) {
+          ctx.font = "32px sans-serif";
+          ctx.fillStyle = "rgba(255,255,255,0.8)";
+          ctx.fillText(subText, 640, 480);
+        }
+        // Patient voice badge
+        ctx.fillStyle = "#fbbf24";
+        ctx.beginPath();
+        ctx.roundRect(440, 540, 400, 60, 12);
+        ctx.fill();
+        ctx.font = "bold 28px sans-serif";
+        ctx.fillStyle = "#000000";
+        ctx.fillText("\u60A3\u8005\u69D8\u306E\u58F0", 640, 578);
+      } else if (thumbnailTemplate === 7) {
+        // 院紹介: シンプル
+        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        ctx.fillRect(0, 0, 1280, 720);
+        if (clinicName) {
+          ctx.font = "bold 72px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = 5;
+          ctx.strokeText(clinicName, 640, 300);
+          ctx.fillText(clinicName, 640, 300);
+        }
+        if (mainText) {
+          ctx.font = "bold 48px sans-serif";
+          ctx.fillStyle = mainColor;
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = 4;
+          ctx.strokeText(mainText, 640, 420);
+          ctx.fillText(mainText, 640, 420);
+        }
+        if (subText) {
+          ctx.font = "28px sans-serif";
+          ctx.fillStyle = "rgba(255,255,255,0.7)";
+          ctx.fillText(subText, 640, 500);
+        }
+      } else if (thumbnailTemplate === 8) {
+        // 衝撃系: 黄×黒
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillRect(0, 0, 1280, 720);
+        // Yellow diagonal stripe
+        ctx.save();
+        ctx.fillStyle = "rgba(255,255,0,0.15)";
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(500, 0);
+        ctx.lineTo(0, 500);
+        ctx.closePath();
+        ctx.fill();
         ctx.restore();
+        if (mainText) {
+          ctx.font = "bold 96px 'Arial Black', Impact, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = "#ffff00";
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = 8;
+          ctx.strokeText(mainText, 640, 340);
+          ctx.fillText(mainText, 640, 340);
+        }
+        if (subText) {
+          ctx.font = "bold 40px sans-serif";
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = 4;
+          ctx.strokeText(subText, 640, 460);
+          ctx.fillText(subText, 640, 460);
+        }
+      } else if (thumbnailTemplate === 9) {
+        // CTA: 予約誘導
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(0, 0, 1280, 720);
+        // Top badge
+        if (clinicName) {
+          ctx.font = "28px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillStyle = "rgba(255,255,255,0.7)";
+          ctx.fillText(clinicName, 640, 60);
+        }
+        if (mainText) {
+          ctx.font = "bold 72px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = 5;
+          ctx.strokeText(mainText, 640, 320);
+          ctx.fillText(mainText, 640, 320);
+        }
+        // CTA button
+        ctx.fillStyle = "#6366f1";
+        ctx.beginPath();
+        ctx.roundRect(340, 500, 600, 80, 16);
+        ctx.fill();
+        ctx.font = "bold 36px sans-serif";
+        ctx.fillStyle = "#ffffff";
+        ctx.textBaseline = "middle";
+        ctx.fillText(subText || "\u4ECA\u3059\u3050\u4E88\u7D04\u3059\u308B", 640, 540);
       }
+      ctx.restore();
     }
+
     const link = document.createElement('a');
     link.download = `thumbnail_${Date.now()}.png`;
     link.href = thumbCanvas.toDataURL('image/png');
@@ -4935,13 +5167,59 @@ ${buildClinicContext(clinicProfile)}`
                   />
                 </div>
                 <div>
+                  <label className="text-xs text-gray-400 block mb-1">サブテキスト（任意）</label>
+                  <input
+                    type="text"
+                    value={thumbnailSubText}
+                    onChange={(e) => setThumbnailSubText(e.target.value)}
+                    placeholder="例: 整体師が教える / ※個人差があります"
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-xl text-xs text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">配色</label>
+                  <div className="grid grid-cols-4 gap-1">
+                    {[
+                      { label: "赤×白", main: "#ff0000", sub: "#ffffff", bg: "rgba(0,0,0,0.7)" },
+                      { label: "黄×黒", main: "#ffff00", sub: "#000000", bg: "rgba(0,0,0,0.8)" },
+                      { label: "白×黒", main: "#ffffff", sub: "#000000", bg: "rgba(0,0,0,0.6)" },
+                      { label: "緑×白", main: "#00ff00", sub: "#ffffff", bg: "rgba(0,0,0,0.7)" },
+                      { label: "青×白", main: "#00bfff", sub: "#ffffff", bg: "rgba(0,0,0,0.7)" },
+                      { label: "紫×白", main: "#c084fc", sub: "#ffffff", bg: "rgba(0,0,0,0.7)" },
+                      { label: "橙×白", main: "#ff8c00", sub: "#ffffff", bg: "rgba(0,0,0,0.7)" },
+                      { label: "桃×白", main: "#ff69b4", sub: "#ffffff", bg: "rgba(0,0,0,0.7)" },
+                    ].map((cs, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setThumbnailColorScheme(cs)}
+                        className={`py-1.5 rounded-lg text-[9px] font-medium transition-all border ${
+                          thumbnailColorScheme.main === cs.main ? "border-indigo-500 bg-gray-700" : "border-gray-700 bg-gray-800 hover:bg-gray-700"
+                        }`}
+                      >
+                        <span style={{ color: cs.main }}>■</span> {cs.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
                   <label className="text-xs text-gray-400 block mb-1">テンプレート</label>
-                  <div className="grid grid-cols-3 gap-1">
-                    {["YouTube風\n大文字中央", "下部グラデ\nテキスト", "左右\n分割テキスト"].map((label, i) => (
+                  <div className="grid grid-cols-2 gap-1">
+                    {[
+                      "YouTube風\n大文字中央",
+                      "下部グラデ",
+                      "ビフォーアフター\n左右分割",
+                      "警告・NG系\n赤バナー",
+                      "ランキング\n数字大きく",
+                      "セルフケア\n手順表示",
+                      "患者の声\n星評価付き",
+                      "院紹介\nシンプル",
+                      "衝撃系\n黄×黒",
+                      "CTA\n予約誘導",
+                    ].map((label, i) => (
                       <button
                         key={i}
                         onClick={() => setThumbnailTemplate(i)}
-                        className={`py-2 rounded-lg text-[10px] font-medium transition-all whitespace-pre-line ${thumbnailTemplate === i ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                        className={`py-2 rounded-lg text-[10px] font-medium transition-all whitespace-pre-line leading-tight ${thumbnailTemplate === i ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
                       >
                         {label}
                       </button>
