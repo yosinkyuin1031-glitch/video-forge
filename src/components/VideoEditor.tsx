@@ -1021,6 +1021,7 @@ export default function VideoEditor() {
   const [thumbnailAfterImg, setThumbnailAfterImg] = useState<string | null>(null);
   const [thumbnailOverlayImg, setThumbnailOverlayImg] = useState<string | null>(null);
   const [thumbnailMarks, setThumbnailMarks] = useState<string[]>([]);
+  const [patientConsentChecked, setPatientConsentChecked] = useState(false);
   const thumbnailBeforeRef = useRef<HTMLInputElement>(null);
   const thumbnailAfterRef = useRef<HTMLInputElement>(null);
   const thumbnailOverlayRef = useRef<HTMLInputElement>(null);
@@ -4911,6 +4912,19 @@ ${buildClinicContext(clinicProfile)}`
                       placeholder="例: 脊柱管狭窄症、坐骨神経痛、頸椎ヘルニア"
                       className="w-full px-2 py-1.5 bg-gray-900 border border-gray-700 rounded text-xs text-white placeholder-gray-600" />
                     <p className="text-[9px] text-gray-600 mt-0.5">専門用語を入力すると認識精度が向上します</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {[
+                        { label: "整形外科系", terms: "脊柱管狭窄症、坐骨神経痛、頸椎ヘルニア、腰椎すべり症、変形性膝関節症、椎間板、脊髄、馬尾神経、神経根、筋膜" },
+                        { label: "自律神経系", terms: "自律神経失調症、交感神経、副交感神経、迷走神経、不定愁訴、起立性調節障害、過敏性腸症候群、パニック障害" },
+                        { label: "施術用語", terms: "トリガーポイント、筋膜リリース、仙腸関節、胸鎖乳突筋、僧帽筋、大腰筋、梨状筋、骨盤矯正、頭蓋仙骨療法" },
+                        { label: "美容系", terms: "美容鍼、リフトアップ、小顔矯正、ほうれい線、むくみ、ターンオーバー、コラーゲン、エラスチン" },
+                      ].map((dict) => (
+                        <button key={dict.label} onClick={() => setWhisperPrompt((prev) => prev ? `${prev}、${dict.terms}` : dict.terms)}
+                          className="px-2 py-0.5 bg-purple-900/40 border border-purple-700/50 rounded text-[9px] text-purple-300 hover:bg-purple-800/50 transition-colors">
+                          + {dict.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div>
                     <label className="text-[10px] text-gray-500 block mb-1">精度 (temperature: {whisperTemperature})</label>
@@ -5890,6 +5904,68 @@ ${buildClinicContext(clinicProfile)}`
                 </button>
               ))}
             </div>
+            {/* QRコード生成（LINE/予約URL） */}
+            {(clinicProfile?.lineUrl || clinicProfile?.bookingUrl) && (
+              <div className="mt-3 p-3 bg-gray-800 rounded-xl space-y-2">
+                <p className="text-xs font-bold text-gray-200">📱 QRコード生成</p>
+                <p className="text-[9px] text-gray-500">エンドカードにQRコードを表示。視聴者がスマホで読み取って予約・LINE登録できます</p>
+                <div className="space-y-1.5">
+                  {clinicProfile?.lineUrl && (
+                    <button
+                      onClick={() => {
+                        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(clinicProfile.lineUrl)}`;
+                        const id = `qr-line-${Date.now()}`;
+                        const newSticker: StickerOverlay = {
+                          id, emoji: "📱", x: 80, y: 30, size: 60, rotation: 0,
+                          startTime: Math.max(0, (duration || 10) - 8), endTime: duration || 10,
+                          opacity: 1, animation: "none", keyframes: [],
+                        };
+                        const ns = [...stickers, newSticker];
+                        setStickers(ns);
+                        const lineText: TextOverlay = {
+                          id: `qr-line-text-${Date.now()}`, text: `LINE登録はこちら→\n${clinicProfile.lineUrl}`,
+                          x: 80, y: 45, fontSize: 14, fontFamily: "sans-serif",
+                          color: "#06C755", bgColor: "rgba(0,0,0,0.8)",
+                          startTime: Math.max(0, (duration || 10) - 8), endTime: duration || 10,
+                          bold: true, italic: false,
+                          outlineColor: "#000000", outlineWidth: 0,
+                          shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0,
+                          animation: "fade-in", keyframes: [],
+                        };
+                        const newOverlays = [...textOverlays, lineText];
+                        setTextOverlays(newOverlays);
+                        pushHistory({ textOverlays: newOverlays, subtitles, silentSegments, videoUrl, stickers: ns, filterSettings, transitionIn, transitionOut });
+                      }}
+                      className="w-full py-2 bg-[#06C755]/20 border border-[#06C755]/40 text-[#06C755] rounded-lg text-xs font-medium hover:bg-[#06C755]/30 transition-colors"
+                    >
+                      LINE QRコード + テロップを挿入
+                    </button>
+                  )}
+                  {clinicProfile?.bookingUrl && (
+                    <button
+                      onClick={() => {
+                        const bookingText: TextOverlay = {
+                          id: `qr-booking-${Date.now()}`, text: `ご予約はこちら→\n${clinicProfile.bookingUrl}`,
+                          x: 80, y: 55, fontSize: 14, fontFamily: "sans-serif",
+                          color: "#ffffff", bgColor: "rgba(79,70,229,0.9)",
+                          startTime: Math.max(0, (duration || 10) - 8), endTime: duration || 10,
+                          bold: true, italic: false,
+                          outlineColor: "#000000", outlineWidth: 0,
+                          shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0,
+                          animation: "fade-in", keyframes: [],
+                        };
+                        const newOverlays = [...textOverlays, bookingText];
+                        setTextOverlays(newOverlays);
+                        pushHistory({ textOverlays: newOverlays, subtitles, silentSegments, videoUrl, stickers, filterSettings, transitionIn, transitionOut });
+                      }}
+                      className="w-full py-2 bg-indigo-600/20 border border-indigo-500/40 text-indigo-300 rounded-lg text-xs font-medium hover:bg-indigo-600/30 transition-colors"
+                    >
+                      予約URL テロップを挿入
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
             {duration > 0 && (
               <p className="text-[10px] text-gray-600 text-center">
                 配置範囲: {Math.max(0, duration - 8).toFixed(1)}秒 〜 {duration.toFixed(1)}秒
@@ -5921,8 +5997,51 @@ ${buildClinicContext(clinicProfile)}`
                 ))}
               </div>
             </div>
+            {/* コンプライアンスチェッカー */}
+            {(() => {
+              const warnings: string[] = [];
+              const hasLegalText = textOverlays.some((t) => t.text.includes("個人差") || t.text.includes("効果を保証") || t.text.includes("施術内容"));
+              const hasBaContent = textOverlays.some((t) => t.text.includes("ビフォー") || t.text.includes("アフター") || t.text.includes("Before") || t.text.includes("After"));
+              if (hasBaContent && !hasLegalText) warnings.push("ビフォーアフター内容がありますが法的注意事項テロップが未設定です");
+              if (duration > 0 && duration < 15 && hasBaContent) warnings.push("15秒未満のBA動画は広告審査で不利になる可能性があります");
+              if (!clinicProfile?.clinicName) warnings.push("院プロフィールが未設定です（院名・連絡先の自動挿入が無効）");
+              if (subtitles.length === 0 && duration > 30) warnings.push("30秒以上の動画に字幕が未設定です（アクセシビリティ・SEO低下）");
+              return warnings.length > 0 ? (
+                <div className="p-3 bg-yellow-950/30 border border-yellow-800/50 rounded-xl space-y-1">
+                  <p className="text-[11px] font-bold text-yellow-400 flex items-center gap-1">⚠️ エクスポート前チェック</p>
+                  {warnings.map((w, i) => <p key={i} className="text-[10px] text-yellow-400/80">・{w}</p>)}
+                </div>
+              ) : (
+                <div className="p-2 bg-green-950/30 border border-green-800/50 rounded-xl">
+                  <p className="text-[10px] text-green-400 text-center">✅ コンプライアンスチェック問題なし</p>
+                </div>
+              );
+            })()}
             <button onClick={handleExport} disabled={processing} className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl text-sm font-bold hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 transition-all">
               {processing ? "エクスポート中..." : `${ASPECT_PRESETS[selectedPresetIdx].label}用にエクスポート`}
+            </button>
+            {/* マルチプラットフォーム一括書き出し */}
+            <button
+              onClick={async () => {
+                if (!videoFile || processing) return;
+                setProcessing(true);
+                try {
+                  if (!await ensureFFmpeg()) return;
+                  for (let i = 0; i < ASPECT_PRESETS.length; i++) {
+                    const p = ASPECT_PRESETS[i];
+                    setProgressMsg(`${p.label} (${i+1}/${ASPECT_PRESETS.length}) エクスポート中...`);
+                    const blob = await exportWithAspectRatio(videoFile, p.width, p.height, setProgressMsg, EXPORT_QUALITY_MAP[exportQuality].bitrate);
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url; a.download = `videoforge_${p.platform}_${Date.now()}.mp4`; a.click();
+                    URL.revokeObjectURL(url);
+                  }
+                  setProgressMsg("全プラットフォーム一括エクスポート完了!");
+                } catch (e) { setProgressMsg(`一括エクスポートに失敗: ${e instanceof Error ? e.message : "不明なエラー"}`); console.error("batch export error:", e); } finally { setProcessing(false); }
+              }}
+              disabled={processing}
+              className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl text-xs font-bold hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 transition-all"
+            >
+              {processing ? "処理中..." : "🚀 全プラットフォーム一括書き出し（YouTube + Reels + Instagram）"}
             </button>
             <button onClick={handleDownloadOriginal} className="w-full py-3 bg-gray-800 text-gray-300 rounded-xl text-sm font-medium hover:bg-gray-700 transition-colors">オリジナルサイズでダウンロード</button>
             <div className="pt-2 border-t border-gray-800">
@@ -6049,8 +6168,15 @@ ${buildClinicContext(clinicProfile)}`
                 {/* 画像アップロード */}
                 <div className="space-y-2">
                   <label className="text-xs text-gray-400 block">画像を使う（任意）</label>
-                  <p className="text-[9px] text-yellow-500/80 bg-yellow-500/10 border border-yellow-500/20 rounded px-2 py-1">⚠️ 患者の顔写真を使用する場合は必ず書面で同意を取得し、個人が特定できないよう加工してください</p>
-                  <div className="grid grid-cols-1 gap-1.5">
+                  <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-2 space-y-1.5">
+                    <p className="text-[9px] text-yellow-500/80">⚠️ 患者の顔写真を使用する場合は必ず書面で同意を取得し、個人が特定できないよう加工してください</p>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input type="checkbox" checked={patientConsentChecked} onChange={(e) => setPatientConsentChecked(e.target.checked)}
+                        className="mt-0.5 rounded border-yellow-600 text-yellow-500 focus:ring-yellow-500" />
+                      <span className="text-[10px] text-yellow-400">患者から書面による撮影・掲載の同意を取得済みです</span>
+                    </label>
+                  </div>
+                  <div className={`grid grid-cols-1 gap-1.5 ${!patientConsentChecked ? "opacity-40 pointer-events-none" : ""}`}>
                     <div>
                       <input ref={thumbnailOverlayRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
                         const f = e.target.files?.[0];
