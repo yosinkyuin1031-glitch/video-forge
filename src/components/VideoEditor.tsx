@@ -960,7 +960,8 @@ export default function VideoEditor() {
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Tool state
-  const [activeTool, setActiveTool] = useState<EditorTool>("select");
+  const [activeTool, setActiveToolRaw] = useState<EditorTool>("select");
+  const [activeToolCategory, setActiveToolCategory] = useState(0);
   const [processing, setProcessing] = useState(false);
   const [progressMsg, setProgressMsg] = useState("");
 
@@ -3388,30 +3389,63 @@ ${buildClinicContext(clinicProfile)}`
     }
   };
 
-  const TOOLS: { key: EditorTool; label: string; icon: string }[] = [
-    { key: "auto", label: "全自動編集", icon: "🚀" },
-    { key: "template", label: "テンプレート", icon: "📋" },
-    { key: "script", label: "AI台本", icon: "📝" },
-    { key: "silence", label: "無音カット", icon: "✂️" },
-    { key: "trim", label: "トリミング", icon: "🎬" },
-    { key: "text", label: "テロップ", icon: "T" },
-    { key: "subtitle", label: "字幕", icon: "💬" },
-    { key: "bgm", label: "BGM", icon: "🎵" },
-    { key: "speed", label: "速度変更", icon: "⚡" },
-    { key: "split", label: "分割", icon: "✂" },
-    { key: "transition", label: "トランジション", icon: "✨" },
-    { key: "filter", label: "フィルター", icon: "🎨" },
-    { key: "sticker", label: "スタンプ", icon: "😀" },
-    { key: "keyframe", label: "キーフレーム", icon: "◆" },
-    { key: "mosaic", label: "モザイク", icon: "🔲" },
-    { key: "chromakey", label: "クロマキー", icon: "🟩" },
-    { key: "logo", label: "ロゴ", icon: "🏷" },
-    { key: "collage", label: "コラージュ", icon: "🖼" },
-    { key: "slideshow", label: "スライドショー", icon: "🎞" },
-    { key: "pip", label: "ワイプ", icon: "📺" },
-    { key: "export", label: "書き出し", icon: "📤" },
-    { key: "clinic-profile", label: "院プロフィール", icon: "🏥" },
+  const TOOL_CATEGORIES: { name: string; color: string; tools: { key: EditorTool; label: string; icon: string }[] }[] = [
+    {
+      name: "基本編集",
+      color: "text-blue-400",
+      tools: [
+        { key: "auto", label: "全自動", icon: "🚀" },
+        { key: "silence", label: "無音カット", icon: "✂️" },
+        { key: "trim", label: "トリミング", icon: "🎬" },
+        { key: "speed", label: "速度変更", icon: "⚡" },
+        { key: "split", label: "分割", icon: "✂" },
+      ],
+    },
+    {
+      name: "テロップ・字幕",
+      color: "text-yellow-400",
+      tools: [
+        { key: "text", label: "テロップ", icon: "T" },
+        { key: "subtitle", label: "字幕", icon: "💬" },
+        { key: "sticker", label: "スタンプ", icon: "😀" },
+        { key: "keyframe", label: "キーフレーム", icon: "◆" },
+      ],
+    },
+    {
+      name: "エフェクト・素材",
+      color: "text-purple-400",
+      tools: [
+        { key: "bgm", label: "BGM", icon: "🎵" },
+        { key: "transition", label: "トランジション", icon: "✨" },
+        { key: "filter", label: "フィルター", icon: "🎨" },
+        { key: "mosaic", label: "モザイク", icon: "🔲" },
+        { key: "chromakey", label: "クロマキー", icon: "🟩" },
+        { key: "logo", label: "ロゴ", icon: "🏷" },
+        { key: "pip", label: "ワイプ", icon: "📺" },
+      ],
+    },
+    {
+      name: "治療家専用",
+      color: "text-green-400",
+      tools: [
+        { key: "template", label: "テンプレート", icon: "📋" },
+        { key: "script", label: "AI台本", icon: "📝" },
+        { key: "clinic-profile", label: "院プロフィール", icon: "🏥" },
+        { key: "collage", label: "コラージュ", icon: "🖼" },
+        { key: "slideshow", label: "スライドショー", icon: "🎞" },
+        { key: "export", label: "書き出し", icon: "📤" },
+      ],
+    },
   ];
+
+  // Tool category-aware setter: auto-switch category tab when tool is set
+  const TOOL_TO_CATEGORY: Record<string, number> = {};
+  TOOL_CATEGORIES.forEach((cat, i) => cat.tools.forEach((t) => { TOOL_TO_CATEGORY[t.key] = i; }));
+  const setActiveTool = useCallback((tool: EditorTool) => {
+    setActiveToolRaw(tool);
+    const catIdx = TOOL_TO_CATEGORY[tool];
+    if (catIdx !== undefined) setActiveToolCategory(catIdx);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!videoUrl) {
     return (
@@ -3531,15 +3565,25 @@ ${buildClinicContext(clinicProfile)}`
         </div>
       </div>
 
-      {/* Tool Bar */}
-      <div className="flex gap-1 px-2 py-2 bg-gray-900 border-t border-gray-800 overflow-x-auto scrollbar-hide">
-        {TOOLS.map((tool) => (
-          <button key={tool.key} onClick={() => setActiveTool(tool.key)} disabled={processing}
-            className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${activeTool === tool.key ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200"} ${processing ? "opacity-50 cursor-not-allowed" : ""}`}>
-            <span className="text-base">{tool.icon}</span>
-            <span>{tool.label}</span>
-          </button>
-        ))}
+      {/* Tool Bar - Category Tabs */}
+      <div className="bg-gray-900 border-t border-gray-800">
+        <div className="flex gap-0 px-2 pt-1.5">
+          {TOOL_CATEGORIES.map((cat, i) => (
+            <button key={cat.name} onClick={() => setActiveToolCategory(i)}
+              className={`px-3 py-1.5 text-[11px] font-bold rounded-t-lg transition-all ${activeToolCategory === i ? "bg-gray-800 text-white border-b-2 border-indigo-500" : "text-gray-500 hover:text-gray-300"}`}>
+              <span className={activeToolCategory === i ? cat.color : ""}>{cat.name}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-1 px-2 py-2 overflow-x-auto scrollbar-hide">
+          {TOOL_CATEGORIES[activeToolCategory].tools.map((tool) => (
+            <button key={tool.key} onClick={() => setActiveTool(tool.key)} disabled={processing}
+              className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${activeTool === tool.key ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200"} ${processing ? "opacity-50 cursor-not-allowed" : ""}`}>
+              <span className="text-base">{tool.icon}</span>
+              <span>{tool.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Tool Panel */}
