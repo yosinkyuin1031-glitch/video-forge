@@ -978,8 +978,15 @@ export default function VideoEditor() {
   const [captionPlatform, setCaptionPlatform] = useState<"Instagram" | "YouTube" | "TikTok">("YouTube");
   const [captionTopic, setCaptionTopic] = useState("");
   const [generatedCaption, setGeneratedCaption] = useState("");
+  const [generatedTitle, setGeneratedTitle] = useState("");
   const [generatedHashtags, setGeneratedHashtags] = useState<string[]>([]);
   const [captionGenerating, setCaptionGenerating] = useState(false);
+
+  // ===== AUTO SUBTITLE =====
+  const [autoSubtitleEnabled, setAutoSubtitleEnabled] = useState<boolean>(() => {
+    try { return localStorage.getItem("videoforge_auto_subtitle") === "true"; } catch { return false; }
+  });
+  const [interimText, setInterimText] = useState("");
 
   // BGM
   const [bgmFile, setBgmFile] = useState<File | null>(null);
@@ -1768,11 +1775,18 @@ export default function VideoEditor() {
           model: "gpt-4o-mini",
           messages: [{
             role: "system",
-            content: `治療院・整体院の${captionPlatform}投稿用キャプションを作成してください。JSON形式で返してください: {"caption": "投稿文", "hashtags": ["#タグ1", "#タグ2", ...]}`
+            content: `あなたは治療院・整体院のSNS投稿の専門コピーライターです。${captionPlatform}投稿用のタイトル・説明文・ハッシュタグを一括生成してください。
+必ず以下のJSON形式で返してください:
+{
+  "title": "動画タイトル（${captionPlatform === "YouTube" ? "60文字以内、SEOを意識" : "30文字以内、キャッチーに"}）",
+  "caption": "投稿説明文（${captionPlatform === "YouTube" ? "300〜500文字、概要欄向け。改行・絵文字を適度に使い見やすく" : "150〜300文字、改行で読みやすく"}）",
+  "hashtags": ["#タグ1", "#タグ2", ...（${captionPlatform === "Instagram" ? "15〜20個" : captionPlatform === "TikTok" ? "5〜8個" : "5〜10個"}）]
+}`
           }, {
             role: "user",
-            content: `動画の内容: ${context}\nプラットフォーム: ${captionPlatform}`
+            content: `動画の内容（書き起こし）:\n${context}\n\nプラットフォーム: ${captionPlatform}`
           }],
+          temperature: 0.7,
         }),
       });
       const data = await response.json();
@@ -1780,6 +1794,7 @@ export default function VideoEditor() {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
+        setGeneratedTitle(parsed.title || "");
         setGeneratedCaption(parsed.caption || "");
         setGeneratedHashtags(parsed.hashtags || []);
       } else {
@@ -2034,6 +2049,24 @@ export default function VideoEditor() {
     historyIndexRef.current = 0;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-subtitle: trigger Whisper when video loads and auto mode is on
+  const autoSubtitleTriggered = useRef(false);
+  useEffect(() => {
+    if (autoSubtitleEnabled && videoFile && whisperApiKey && !processing && !autoSubtitleTriggered.current && subtitles.length === 0) {
+      autoSubtitleTriggered.current = true;
+      // Small delay to let video load
+      const timer = setTimeout(() => {
+        handleWhisperSubtitles();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [videoFile, autoSubtitleEnabled, whisperApiKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset auto-subtitle trigger when new video is uploaded
+  useEffect(() => {
+    if (!videoFile) autoSubtitleTriggered.current = false;
+  }, [videoFile]);
+
   const handleLoadedMetadata = useCallback(() => {
     if (videoRef.current) { setDuration(videoRef.current.duration); setTrimEnd(videoRef.current.duration); }
   }, []);
@@ -2134,17 +2167,22 @@ export default function VideoEditor() {
     recognition.lang = "ja-JP"; recognition.continuous = true; recognition.interimResults = true;
     let lastFinalTime = currentTime;
     recognition.onresult = (event: any) => {
+      let interim = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
         if (event.results[i].isFinal) {
           const text = event.results[i][0].transcript;
           const now = videoRef.current?.currentTime || 0;
           setSubtitles((prev) => [...prev, { id: `sub-${Date.now()}-${i}`, text, startTime: lastFinalTime, endTime: now }]);
           lastFinalTime = now;
+          setInterimText("");
+        } else {
+          interim += event.results[i][0].transcript;
         }
       }
+      if (interim) setInterimText(interim);
     };
-    recognition.onerror = () => setIsListening(false);
-    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => { setIsListening(false); setInterimText(""); };
+    recognition.onend = () => { setIsListening(false); setInterimText(""); };
     recognitionRef.current = recognition;
     recognition.start(); setIsListening(true);
     if (videoRef.current?.paused) { videoRef.current.play(); setIsPlaying(true); }
@@ -3675,7 +3713,16 @@ export default function VideoEditor() {
                 <button onClick={isListening ? stopVoiceRecognition : startVoiceRecognition} className={`w-full py-3 rounded-xl text-sm font-bold transition-colors ${isListening ? "bg-red-600 text-white hover:bg-red-500 animate-pulse" : "bg-indigo-600 text-white hover:bg-indigo-500"}`}>
                   {isListening ? "⏹ 認識を停止" : "🎙 音声認識を開始"}
                 </button>
-                {isListening && <p className="text-xs text-red-400 text-center animate-pulse">認識中... 動画を再生して音声を拾っています</p>}
+                {isListening && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-red-400 text-center animate-pulse">認識中... 動画を再生して音声を拾っています</p>
+                    {interimText && (
+                      <div className="bg-gray-800 rounded-lg px-3 py-2 border border-indigo-500/30">
+                        <p className="text-xs text-indigo-300 opacity-70">{interimText}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -3726,6 +3773,23 @@ export default function VideoEditor() {
                 >
                   {processing ? "処理中..." : "🤖 AI字幕を自動生成"}
                 </button>
+                {/* Auto-subtitle toggle */}
+                <label className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2.5 cursor-pointer">
+                  <div>
+                    <span className="text-xs font-medium text-gray-200">動画読み込み時に自動生成</span>
+                    <p className="text-[10px] text-gray-500 mt-0.5">動画をアップロードすると即座に字幕生成</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const next = !autoSubtitleEnabled;
+                      setAutoSubtitleEnabled(next);
+                      try { localStorage.setItem("videoforge_auto_subtitle", String(next)); } catch {}
+                    }}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${autoSubtitleEnabled ? "bg-purple-600" : "bg-gray-600"}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${autoSubtitleEnabled ? "left-5.5 translate-x-0" : "left-0.5"}`} style={autoSubtitleEnabled ? { left: '22px' } : { left: '2px' }} />
+                  </button>
+                </label>
                 {!videoFile && <p className="text-[10px] text-yellow-500 text-center">先に動画をアップロードしてください</p>}
                 {!whisperApiKey && videoFile && <p className="text-[10px] text-yellow-500 text-center">APIキーを設定してください</p>}
               </div>
@@ -4759,7 +4823,8 @@ export default function VideoEditor() {
 
             {/* SNS Caption Generation */}
             <div className="pt-2 border-t border-gray-800">
-              <h4 className="text-sm font-bold text-gray-200 mb-2">SNSキャプション生成</h4>
+              <h4 className="text-sm font-bold text-gray-200 mb-2">AI テキスト一括生成</h4>
+              <p className="text-[10px] text-gray-500 mb-2">タイトル・説明文・ハッシュタグを一発生成</p>
               {!whisperApiKey && (
                 <p className="text-xs text-yellow-400 mb-2">⚠️ 字幕ツールでOpenAI APIキーを設定してください</p>
               )}
@@ -4791,22 +4856,41 @@ export default function VideoEditor() {
                   disabled={captionGenerating || !whisperApiKey}
                   className="w-full py-2.5 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-xl text-sm font-bold hover:from-pink-500 hover:to-purple-500 disabled:opacity-50 transition-all"
                 >
-                  {captionGenerating ? "生成中..." : "キャプションを生成"}
+                  {captionGenerating ? "生成中..." : "タイトル・説明・タグを一括生成"}
                 </button>
-                {generatedCaption && (
+                {(generatedTitle || generatedCaption) && (
                   <div className="space-y-2">
-                    <div className="bg-gray-900 rounded-xl p-3 border border-gray-700">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-[10px] text-gray-500 font-medium">投稿文</p>
-                        <button
-                          onClick={() => { try { navigator.clipboard.writeText(generatedCaption); setProgressMsg("投稿文をコピーしました"); } catch {} }}
-                          className="text-[10px] text-indigo-400 hover:text-indigo-300"
-                        >
-                          コピー
-                        </button>
+                    {/* Title */}
+                    {generatedTitle && (
+                      <div className="bg-gray-900 rounded-xl p-3 border border-gray-700">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-[10px] text-gray-500 font-medium">タイトル</p>
+                          <button
+                            onClick={() => { try { navigator.clipboard.writeText(generatedTitle); setProgressMsg("タイトルをコピーしました"); } catch {} }}
+                            className="text-[10px] text-indigo-400 hover:text-indigo-300"
+                          >
+                            コピー
+                          </button>
+                        </div>
+                        <p className="text-sm text-white font-bold">{generatedTitle}</p>
                       </div>
-                      <p className="text-xs text-gray-300 whitespace-pre-wrap">{generatedCaption}</p>
-                    </div>
+                    )}
+                    {/* Caption */}
+                    {generatedCaption && (
+                      <div className="bg-gray-900 rounded-xl p-3 border border-gray-700">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-[10px] text-gray-500 font-medium">説明文</p>
+                          <button
+                            onClick={() => { try { navigator.clipboard.writeText(generatedCaption); setProgressMsg("説明文をコピーしました"); } catch {} }}
+                            className="text-[10px] text-indigo-400 hover:text-indigo-300"
+                          >
+                            コピー
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-300 whitespace-pre-wrap">{generatedCaption}</p>
+                      </div>
+                    )}
+                    {/* Hashtags */}
                     {generatedHashtags.length > 0 && (
                       <div className="bg-gray-900 rounded-xl p-3 border border-gray-700">
                         <div className="flex items-center justify-between mb-1">
@@ -4821,6 +4905,16 @@ export default function VideoEditor() {
                         <p className="text-xs text-indigo-300">{generatedHashtags.join(" ")}</p>
                       </div>
                     )}
+                    {/* Copy all button */}
+                    <button
+                      onClick={() => {
+                        const all = [generatedTitle, generatedCaption, generatedHashtags.join(" ")].filter(Boolean).join("\n\n");
+                        try { navigator.clipboard.writeText(all); setProgressMsg("全テキストをコピーしました"); } catch {}
+                      }}
+                      className="w-full py-2 bg-gray-800 text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-700 transition-colors"
+                    >
+                      全部まとめてコピー
+                    </button>
                   </div>
                 )}
               </div>
