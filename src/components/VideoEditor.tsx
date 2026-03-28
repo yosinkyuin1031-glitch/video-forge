@@ -1153,6 +1153,8 @@ export default function VideoEditor() {
 
   // Export
   const [selectedPresetIdx, setSelectedPresetIdx] = useState(0);
+  const [exportQuality, setExportQuality] = useState<"high" | "medium" | "low">("high");
+  const EXPORT_QUALITY_MAP = { high: { label: "高画質", bitrate: "8M", desc: "YouTube推奨" }, medium: { label: "標準", bitrate: "4M", desc: "SNS向け（軽量）" }, low: { label: "軽量", bitrate: "2M", desc: "容量を抑えたい時" } };
 
   // FFmpeg loading
   const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
@@ -2441,6 +2443,50 @@ ${buildClinicContext(clinicProfile)}`
     setTransitionIn({ ...DEFAULT_TRANSITION }); setTransitionOut({ ...DEFAULT_TRANSITION });
     pushHistory({ textOverlays: [], subtitles: [], silentSegments: [], videoUrl, stickers: [], filterSettings: { ...DEFAULT_FILTERS }, transitionIn: { ...DEFAULT_TRANSITION }, transitionOut: { ...DEFAULT_TRANSITION } });
     setProgressMsg("プロジェクトをリセットしました");
+  };
+
+  // プロジェクトファイル保存（JSON）
+  const handleExportProject = () => {
+    const projectData = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      textOverlays, subtitles, clipMarkers, filterSettings, stickers,
+      mosaicAreas, trimStart, trimEnd, bgmVolume,
+      transitionIn, transitionOut,
+    };
+    const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.download = `videoforge_project_${new Date().toISOString().slice(0, 10)}.json`;
+    link.href = URL.createObjectURL(blob);
+    link.click();
+    URL.revokeObjectURL(link.href);
+    setProgressMsg("プロジェクトをエクスポートしました");
+  };
+
+  const projectImportRef = useRef<HTMLInputElement>(null);
+  const handleImportProject = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result as string);
+        if (data.textOverlays) setTextOverlays(data.textOverlays);
+        if (data.subtitles) setSubtitles(data.subtitles);
+        if (data.clipMarkers) setClipMarkers(data.clipMarkers);
+        if (data.filterSettings) setFilterSettings(data.filterSettings);
+        if (data.stickers) setStickers(data.stickers);
+        if (data.mosaicAreas) setMosaicAreas(data.mosaicAreas);
+        if (data.trimStart !== undefined) setTrimStart(data.trimStart);
+        if (data.trimEnd !== undefined) setTrimEnd(data.trimEnd);
+        if (data.bgmVolume !== undefined) setBgmVolume(data.bgmVolume);
+        if (data.transitionIn) setTransitionIn(data.transitionIn);
+        if (data.transitionOut) setTransitionOut(data.transitionOut);
+        setProgressMsg("プロジェクトを読み込みました");
+      } catch { setProgressMsg("プロジェクトファイルの読み込みに失敗しました"); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
   };
 
   // ===== DRAG TO ADJUST =====
@@ -3918,6 +3964,9 @@ ${buildClinicContext(clinicProfile)}`
           <input ref={fileInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" aria-label="動画ファイルを選択" />
           <button onClick={handleUndo} disabled={historyIndex <= 0} title="元に戻す (Ctrl+Z)" aria-label="元に戻す" className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-1.5 bg-gray-800 rounded-lg text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0">↩<span className="hidden sm:inline"> 戻す</span></button>
           <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} title="やり直す (Ctrl+Shift+Z)" aria-label="やり直す" className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-1.5 bg-gray-800 rounded-lg text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0">↪<span className="hidden sm:inline"> やり直す</span></button>
+          <button onClick={handleExportProject} aria-label="プロジェクトを保存" title="編集内容をJSONファイルに保存" className="hidden sm:block text-[10px] sm:text-xs px-1.5 sm:px-2 py-1.5 bg-gray-800 rounded-lg text-gray-300 hover:bg-gray-700 flex-shrink-0">💾 保存</button>
+          <input ref={projectImportRef} type="file" accept=".json" onChange={handleImportProject} className="hidden" />
+          <button onClick={() => projectImportRef.current?.click()} aria-label="プロジェクトを読み込み" title="保存したプロジェクトを読み込む" className="hidden sm:block text-[10px] sm:text-xs px-1.5 sm:px-2 py-1.5 bg-gray-800 rounded-lg text-gray-300 hover:bg-gray-700 flex-shrink-0">📂 読込</button>
           <button onClick={handleResetProject} aria-label="プロジェクトをリセット" className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-1.5 bg-gray-800 rounded-lg text-red-400 hover:bg-gray-700 flex-shrink-0"><span className="sm:hidden">×</span><span className="hidden sm:inline">リセット</span></button>
           {autoSaved && <span className="text-[10px] text-green-400 animate-pulse flex-shrink-0" role="status">💾</span>}
         </div>
@@ -5851,6 +5900,17 @@ ${buildClinicContext(clinicProfile)}`
                   <p className="text-[10px] text-gray-500">{preset.width}x{preset.height} ({preset.ratio})</p>
                 </button>
               ))}
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">画質</label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(["high", "medium", "low"] as const).map((q) => (
+                  <button key={q} onClick={() => setExportQuality(q)} className={`p-2 rounded-lg text-left transition-all border ${exportQuality === q ? "border-indigo-500 bg-indigo-500/10" : "border-gray-700 bg-gray-800/50 hover:border-gray-600"}`}>
+                    <p className="text-[11px] font-medium text-gray-200">{EXPORT_QUALITY_MAP[q].label}</p>
+                    <p className="text-[9px] text-gray-500">{EXPORT_QUALITY_MAP[q].desc}</p>
+                  </button>
+                ))}
+              </div>
             </div>
             <button onClick={handleExport} disabled={processing} className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl text-sm font-bold hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50 transition-all">
               {processing ? "エクスポート中..." : `${ASPECT_PRESETS[selectedPresetIdx].label}用にエクスポート`}
