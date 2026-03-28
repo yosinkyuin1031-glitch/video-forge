@@ -4485,7 +4485,7 @@ ${buildClinicContext(clinicProfile)}`
                   { label: "🌐 WEB予約", text: "24時間WEB予約受付中\n概要欄のリンクからどうぞ", style: { fontSize: 22, color: "#ffffff", bgColor: "rgba(37,99,235,0.9)", bold: true, x: 50, y: 80 } },
                   { label: "🎁 初回限定", text: "初回限定 50%OFF!\nご予約は概要欄のリンクから", style: { fontSize: 26, color: "#ffffff", bgColor: "rgba(220,38,38,0.9)", bold: true, x: 50, y: 75 } },
                   { label: "💰 無料相談", text: "初回カウンセリング無料\nお気軽にご相談ください", style: { fontSize: 24, color: "#ffffff", bgColor: "rgba(16,185,129,0.9)", bold: true, x: 50, y: 80 } },
-                  { label: "📱 電話予約", text: clinicProfile?.clinicName ? `${clinicProfile.clinicName}\nお電話でのご予約も受付中` : "お電話でのご予約も受付中\nTEL: 000-0000-0000", style: { fontSize: 22, color: "#ffffff", bgColor: "rgba(0,0,0,0.85)", bold: true, x: 50, y: 80 } },
+                  { label: "📱 電話予約", text: clinicProfile?.phone ? `${clinicProfile.clinicName || "当院"}\nTEL: ${clinicProfile.phone}` : "お電話でのご予約も受付中\nTEL: 000-0000-0000", style: { fontSize: 22, color: "#ffffff", bgColor: "rgba(0,0,0,0.85)", bold: true, x: 50, y: 80 } },
                   { label: "📷 Instagram", text: "Instagramフォローで\n最新の健康情報をお届け!", style: { fontSize: 22, color: "#ffffff", bgColor: "rgba(225,48,108,0.9)", bold: true, x: 50, y: 80 } },
                   { label: "▶️ 続きは次回", text: "続きは次の動画で!\nフォローして見逃さないでね", style: { fontSize: 24, color: "#ffffff", bgColor: "rgba(99,102,241,0.85)", bold: true, x: 50, y: 50 } },
                   { label: "⏰ 期間限定", text: "今月末まで限定!\n初回施術 ○○円引き", style: { fontSize: 26, color: "#ffff00", bgColor: "rgba(220,38,38,0.9)", bold: true, x: 50, y: 75 } },
@@ -6127,6 +6127,7 @@ ${buildClinicContext(clinicProfile)}`
                 <div className="space-y-1 text-[11px] text-gray-400">
                   <p><span className="text-gray-500">院名:</span> {clinicProfile.clinicName}</p>
                   {clinicProfile.area && <p><span className="text-gray-500">地域:</span> {clinicProfile.area}</p>}
+                  {clinicProfile.phone && <p><span className="text-gray-500">TEL:</span> {clinicProfile.phone}</p>}
                   {clinicProfile.specialties.length > 0 && <p><span className="text-gray-500">得意:</span> {clinicProfile.specialties.join("、")}</p>}
                   {clinicProfile.treatmentStyle && <p><span className="text-gray-500">手技:</span> {clinicProfile.treatmentStyle}</p>}
                   {clinicProfile.target && <p><span className="text-gray-500">対象:</span> {clinicProfile.target}</p>}

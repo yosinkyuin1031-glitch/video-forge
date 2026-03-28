@@ -28,6 +28,9 @@ interface ClinicProfileSetupProps {
 export default function ClinicProfileSetup({ profile, onSave }: ClinicProfileSetupProps) {
   const [clinicName, setClinicName] = useState(profile?.clinicName || "");
   const [area, setArea] = useState(profile?.area || "");
+  const [phone, setPhone] = useState(profile?.phone || "");
+  const [lineUrl, setLineUrl] = useState(profile?.lineUrl || "");
+  const [bookingUrl, setBookingUrl] = useState(profile?.bookingUrl || "");
   const [specialties, setSpecialties] = useState<string[]>(profile?.specialties || []);
   const [customSpecialty, setCustomSpecialty] = useState("");
   const [treatmentStyle, setTreatmentStyle] = useState(profile?.treatmentStyle || "");
@@ -54,6 +57,9 @@ export default function ClinicProfileSetup({ profile, onSave }: ClinicProfileSet
     const p: ClinicProfile = {
       clinicName,
       area,
+      phone,
+      lineUrl,
+      bookingUrl,
       specialties,
       treatmentStyle,
       target,
@@ -103,6 +109,42 @@ export default function ClinicProfileSetup({ profile, onSave }: ClinicProfileSet
           placeholder="例: 横浜市青葉区"
           className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-xl text-xs text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500"
         />
+      </div>
+
+      {/* 電話番号 */}
+      <div>
+        <label className="text-xs text-gray-400 block mb-1">電話番号</label>
+        <input
+          type="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="例: 045-123-4567"
+          className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-xl text-xs text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+        />
+      </div>
+
+      {/* LINE・予約URL */}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-gray-400 block mb-1">LINE URL</label>
+          <input
+            type="url"
+            value={lineUrl}
+            onChange={(e) => setLineUrl(e.target.value)}
+            placeholder="https://lin.ee/..."
+            className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-xl text-xs text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-400 block mb-1">予約URL</label>
+          <input
+            type="url"
+            value={bookingUrl}
+            onChange={(e) => setBookingUrl(e.target.value)}
+            placeholder="https://..."
+            className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-xl text-xs text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+          />
+        </div>
       </div>
 
       {/* 得意症状 */}

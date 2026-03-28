@@ -82,6 +82,9 @@ export type EditorTool = "auto" | "select" | "text" | "trim" | "silence" | "bgm"
 export interface ClinicProfile {
   clinicName: string;
   area: string;
+  phone: string;
+  lineUrl: string;
+  bookingUrl: string;
   specialties: string[];
   treatmentStyle: string;
   target: string;
