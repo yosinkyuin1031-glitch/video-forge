@@ -3634,19 +3634,19 @@ ${buildClinicContext(clinicProfile)}`
   ];
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col" role="application" aria-label="VideoForge動画エディタ">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-2 bg-gray-900/80 border-b border-gray-800">
+      <header className="flex items-center justify-between px-4 py-2 bg-gray-900/80 border-b border-gray-800" role="toolbar" aria-label="メインツールバー">
         <div className="flex items-center gap-2">
-          <span className="text-lg font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">VF</span>
-          <button onClick={() => fileInputRef.current?.click()} className="text-xs px-3 py-1.5 bg-gray-800 rounded-lg text-gray-300 hover:bg-gray-700">別の動画</button>
-          <input ref={fileInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
-          <button onClick={handleUndo} disabled={historyIndex <= 0} title="元に戻す (Ctrl+Z)" className="text-xs px-2 py-1.5 bg-gray-800 rounded-lg text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed">↩ 戻す</button>
-          <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} title="やり直す (Ctrl+Shift+Z)" className="text-xs px-2 py-1.5 bg-gray-800 rounded-lg text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed">↪ やり直す</button>
-          <button onClick={handleResetProject} className="text-xs px-2 py-1.5 bg-gray-800 rounded-lg text-red-400 hover:bg-gray-700">リセット</button>
-          {autoSaved && <span className="text-[10px] text-green-400 animate-pulse">💾 保存済み</span>}
+          <span className="text-lg font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent" aria-label="VideoForge">VF</span>
+          <button onClick={() => fileInputRef.current?.click()} aria-label="別の動画を選択" className="text-xs px-3 py-1.5 bg-gray-800 rounded-lg text-gray-300 hover:bg-gray-700">別の動画</button>
+          <input ref={fileInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" aria-label="動画ファイルを選択" />
+          <button onClick={handleUndo} disabled={historyIndex <= 0} title="元に戻す (Ctrl+Z)" aria-label="元に戻す" className="text-xs px-2 py-1.5 bg-gray-800 rounded-lg text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed">↩ 戻す</button>
+          <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} title="やり直す (Ctrl+Shift+Z)" aria-label="やり直す" className="text-xs px-2 py-1.5 bg-gray-800 rounded-lg text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed">↪ やり直す</button>
+          <button onClick={handleResetProject} aria-label="プロジェクトをリセット" className="text-xs px-2 py-1.5 bg-gray-800 rounded-lg text-red-400 hover:bg-gray-700">リセット</button>
+          {autoSaved && <span className="text-[10px] text-green-400 animate-pulse" role="status">💾 保存済み</span>}
         </div>
-        <button onClick={handleDownloadOriginal} className="text-xs px-3 py-1.5 bg-indigo-600 rounded-lg text-white hover:bg-indigo-500">保存</button>
+        <button onClick={handleDownloadOriginal} aria-label="動画を保存" className="text-xs px-3 py-1.5 bg-indigo-600 rounded-lg text-white hover:bg-indigo-500">保存</button>
       </header>
 
       {/* Restore prompt */}
@@ -3662,7 +3662,7 @@ ${buildClinicContext(clinicProfile)}`
 
       {/* Video Preview */}
       <div className="relative bg-black flex items-center justify-center" style={{ minHeight: "40vh" }}>
-        <video ref={videoRef} src={videoUrl} onLoadedMetadata={handleLoadedMetadata} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} className="max-w-full max-h-[40vh]" style={{ display: showCanvas ? "none" : "block" }} playsInline />
+        <video ref={videoRef} src={videoUrl} onLoadedMetadata={handleLoadedMetadata} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} className="max-w-full max-h-[40vh]" style={{ display: showCanvas ? "none" : "block" }} playsInline aria-label="動画プレビュー" />
         <canvas
           ref={canvasRef}
           className="max-w-full max-h-[40vh]"
@@ -3686,8 +3686,8 @@ ${buildClinicContext(clinicProfile)}`
           <div className="absolute top-2 right-2 bg-indigo-600/90 backdrop-blur-sm rounded px-2 py-0.5 text-xs text-white font-bold">{playbackSpeed}x</div>
         )}
         {progressMsg && (
-          <div className="absolute bottom-2 left-2 right-2 bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2 text-xs text-center">
-            {processing && <span className="inline-block w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mr-2 align-middle" />}
+          <div className="absolute bottom-2 left-2 right-2 bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2 text-xs text-center" role="status" aria-live="polite">
+            {processing && <span className="inline-block w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mr-2 align-middle" aria-hidden="true" />}
             {progressMsg}
           </div>
         )}
@@ -3711,28 +3711,28 @@ ${buildClinicContext(clinicProfile)}`
       </div>
 
       {/* Tool Bar - Category Tabs */}
-      <div className="bg-gray-900 border-t border-gray-800">
-        <div className="flex gap-0 px-2 pt-1.5">
+      <nav className="bg-gray-900 border-t border-gray-800" aria-label="編集ツール">
+        <div className="flex gap-0 px-2 pt-1.5" role="tablist" aria-label="ツールカテゴリ">
           {TOOL_CATEGORIES.map((cat, i) => (
-            <button key={cat.name} onClick={() => setActiveToolCategory(i)}
+            <button key={cat.name} onClick={() => setActiveToolCategory(i)} role="tab" aria-selected={activeToolCategory === i} aria-controls={`toolpanel-${i}`}
               className={`px-3 py-1.5 text-[11px] font-bold rounded-t-lg transition-all ${activeToolCategory === i ? "bg-gray-800 text-white border-b-2 border-indigo-500" : "text-gray-500 hover:text-gray-300"}`}>
               <span className={activeToolCategory === i ? cat.color : ""}>{cat.name}</span>
             </button>
           ))}
         </div>
-        <div className="flex gap-1 px-2 py-2 overflow-x-auto scrollbar-hide">
+        <div className="flex gap-1 px-2 py-2 overflow-x-auto scrollbar-hide" role="tabpanel" id={`toolpanel-${activeToolCategory}`}>
           {TOOL_CATEGORIES[activeToolCategory].tools.map((tool) => (
-            <button key={tool.key} onClick={() => setActiveTool(tool.key)} disabled={processing}
+            <button key={tool.key} onClick={() => setActiveTool(tool.key)} disabled={processing} aria-label={tool.label} aria-pressed={activeTool === tool.key}
               className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${activeTool === tool.key ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200"} ${processing ? "opacity-50 cursor-not-allowed" : ""}`}>
-              <span className="text-base">{tool.icon}</span>
+              <span className="text-base" aria-hidden="true">{tool.icon}</span>
               <span>{tool.label}</span>
             </button>
           ))}
         </div>
-      </div>
+      </nav>
 
       {/* Tool Panel */}
-      <div className="flex-1 overflow-y-auto p-4 bg-gray-950">
+      <div className="flex-1 overflow-y-auto p-4 bg-gray-950" role="region" aria-label="ツール設定パネル">
         {/* Auto Edit */}
         {activeTool === "auto" && (
           <div className="space-y-4">
