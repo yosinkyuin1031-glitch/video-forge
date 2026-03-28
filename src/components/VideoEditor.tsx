@@ -4483,6 +4483,40 @@ ${buildClinicContext(clinicProfile)}`
                 </button>
               </div>
             )}
+            {/* 公開カレンダー提案 */}
+            <div className="pt-3 border-t border-gray-800">
+              <p className="text-xs font-bold text-gray-200 mb-2">📅 今月のおすすめ投稿テーマ</p>
+              <p className="text-[9px] text-gray-500 mb-2">症状×季節に合わせた投稿で視聴数を最大化</p>
+              {(() => {
+                const month = new Date().getMonth() + 1;
+                const calendarData: Record<number, { themes: string[]; reason: string }> = {
+                  1: { themes: ["正月太り解消", "冷え性対策", "ぎっくり腰予防", "年始の体メンテナンス"], reason: "年末年始の体の不調・ダイエット需要" },
+                  2: { themes: ["花粉症と自律神経", "肩こり改善", "受験疲れ解消", "バレンタイン小顔"], reason: "花粉シーズン開始・受験終了期" },
+                  3: { themes: ["春の自律神経ケア", "新生活前のメンテ", "花粉症対策", "卒業式前の姿勢改善"], reason: "季節の変わり目・新生活準備" },
+                  4: { themes: ["五月病予防", "新生活の腰痛", "ストレス性頭痛", "デスクワーク姿勢"], reason: "環境変化によるストレス増加" },
+                  5: { themes: ["五月病の自律神経", "GW疲れリセット", "梅雨前の関節ケア", "産後骨盤矯正"], reason: "GW疲れ・梅雨前対策" },
+                  6: { themes: ["梅雨だるさ解消", "低気圧頭痛", "むくみ解消", "睡眠改善"], reason: "梅雨の気象病・湿度対策" },
+                  7: { themes: ["夏バテ予防", "冷房による首こり", "水分と筋肉", "夏のぎっくり腰"], reason: "冷房+暑さによる体調不良" },
+                  8: { themes: ["お盆疲れケア", "熱中症と自律神経", "夏の睡眠改善", "冷え対策（意外と夏も）"], reason: "夏の冷え・お盆休み明け" },
+                  9: { themes: ["秋バテ対策", "台風と頭痛", "スポーツの秋ケガ予防", "夏疲れリセット"], reason: "季節の変わり目・台風シーズン" },
+                  10: { themes: ["秋の腰痛", "紅葉ウォーキングと膝", "冷え始めの対策", "ハロウィン姿勢"], reason: "気温低下開始・行楽シーズン" },
+                  11: { themes: ["冬前の冷え対策", "年末に向けた体ケア", "乾燥と肌・美容鍼", "七五三疲れ（産後ママ）"], reason: "本格冬前の予防ケア需要" },
+                  12: { themes: ["年末大掃除の腰痛", "忘年会疲れ", "冬の肩こり", "1年の体メンテナンス"], reason: "年末の体への負担・まとめ系コンテンツ" },
+                };
+                const data = calendarData[month] || calendarData[1];
+                return (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] text-indigo-400">{month}月の需要: {data.reason}</p>
+                    {data.themes.map((theme, i) => (
+                      <button key={i} onClick={() => setScriptTopic(theme)}
+                        className="w-full text-left py-1.5 px-2.5 bg-gray-800 rounded-lg text-[11px] text-gray-300 hover:bg-gray-700 hover:text-indigo-300 transition-colors">
+                        {i + 1}. {theme}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         )}
 
@@ -5890,7 +5924,34 @@ ${buildClinicContext(clinicProfile)}`
           <div className="space-y-4">
             <h3 className="text-sm font-bold text-gray-200">エンドカード / CTAカード</h3>
             <p className="text-xs text-gray-400">動画の最後8秒間に自動配置されます。院プロフィールを設定すると院名が自動挿入されます。</p>
+            {/* 自動イントロ */}
+            <div className="space-y-2 pb-3 border-b border-gray-800">
+              <p className="text-xs font-medium text-indigo-400">イントロ（冒頭3秒）</p>
+              {[
+                { label: "院名イントロ", desc: "院名をフェードインで表示", textContent: clinicProfile?.clinicName || "院名を設定してください", sub: clinicProfile?.area || "", style: { x: 50, y: 45, fontSize: 28, color: "#ffffff", bgColor: "transparent", bold: true, outlineWidth: 3, outlineColor: "#000000" } },
+                { label: "専門性アピール", desc: "得意症状＋院名", textContent: `${clinicProfile?.specialties?.[0] || "専門"}のプロフェッショナル`, sub: clinicProfile?.clinicName || "", style: { x: 50, y: 40, fontSize: 22, color: "#ffffff", bgColor: "rgba(79,70,229,0.85)", bold: true, outlineWidth: 0, outlineColor: "#000000" } },
+                { label: "キャッチコピー", desc: "信頼＋実績のイントロ", textContent: clinicProfile?.achievements || "年間2,000人以上の施術実績", sub: clinicProfile?.clinicName || "", style: { x: 50, y: 40, fontSize: 20, color: "#FFD700", bgColor: "rgba(0,0,0,0.8)", bold: true, outlineWidth: 2, outlineColor: "#000000" } },
+              ].map((intro, i) => (
+                <button key={i} onClick={() => {
+                  const introOverlays: TextOverlay[] = [
+                    { id: `intro-main-${Date.now()}`, text: intro.textContent, x: intro.style.x, y: intro.style.y, fontSize: intro.style.fontSize, fontFamily: "sans-serif", color: intro.style.color, bgColor: intro.style.bgColor, startTime: 0, endTime: 3, bold: intro.style.bold, italic: false, outlineColor: intro.style.outlineColor, outlineWidth: intro.style.outlineWidth, shadowColor: "rgba(0,0,0,0.8)", shadowBlur: 10, shadowOffsetX: 0, shadowOffsetY: 2, animation: "fade-in", keyframes: [] },
+                  ];
+                  if (intro.sub) {
+                    introOverlays.push({ id: `intro-sub-${Date.now()}`, text: intro.sub, x: 50, y: intro.style.y + 10, fontSize: 16, fontFamily: "sans-serif", color: "#cccccc", bgColor: "transparent", startTime: 0.5, endTime: 3, bold: false, italic: false, outlineColor: "#000000", outlineWidth: 2, shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0, animation: "fade-in", keyframes: [] });
+                  }
+                  const newOverlays = [...textOverlays, ...introOverlays];
+                  setTextOverlays(newOverlays);
+                  pushHistory({ textOverlays: newOverlays, subtitles, silentSegments, videoUrl, stickers, filterSettings, transitionIn, transitionOut });
+                }}
+                  className="w-full text-left p-2.5 bg-indigo-900/20 rounded-lg hover:bg-indigo-900/40 transition-colors border border-indigo-800/30 hover:border-indigo-500">
+                  <p className="text-[11px] font-medium text-indigo-300">{intro.label}</p>
+                  <p className="text-[9px] text-gray-500">{intro.desc}</p>
+                </button>
+              ))}
+            </div>
+            {/* エンドカード */}
             <div className="space-y-2">
+              <p className="text-xs font-medium text-orange-400">エンドカード（末尾8秒）</p>
               {ENDCARD_TEMPLATES.map((tmpl, i) => (
                 <button key={tmpl.id} onClick={() => handleApplyEndcard(i)}
                   className="w-full text-left p-3 bg-gray-800 rounded-xl hover:bg-gray-700 transition-colors border border-gray-700 hover:border-indigo-500">
@@ -6259,6 +6320,42 @@ ${buildClinicContext(clinicProfile)}`
                     >
                       サムネイルをダウンロード
                     </button>
+                    {/* サムネイル品質スコア */}
+                    {(() => {
+                      let score = 0; const tips: string[] = [];
+                      // テキストがあるか
+                      if (thumbnailText.trim()) { score += 25; } else { tips.push("メインテキストを追加してください"); }
+                      // サブテキストがあるか
+                      if (thumbnailSubText.trim()) { score += 15; } else { tips.push("サブテキストを追加すると情報量UP"); }
+                      // 画像を使っているか
+                      if (thumbnailOverlayImg || thumbnailBeforeImg) { score += 20; } else { tips.push("画像を使うとクリック率UP"); }
+                      // BA両方あるか
+                      if (thumbnailBeforeImg && thumbnailAfterImg) { score += 15; } else if (thumbnailBeforeImg || thumbnailAfterImg) { tips.push("Before/After両方揃えると効果的"); }
+                      // マーク（矢印等）があるか
+                      if (thumbnailMarks.length > 0) { score += 10; } else { tips.push("矢印やマークを追加して視線誘導"); }
+                      // テキストが短すぎないか
+                      if (thumbnailText.length >= 5 && thumbnailText.length <= 20) { score += 10; } else if (thumbnailText.length > 20) { tips.push("テキストは20文字以内が最適"); } else { tips.push("テキストが短すぎます（5文字以上推奨）"); }
+                      // 院名があるか
+                      if (clinicProfile?.clinicName && thumbnailText.includes(clinicProfile.clinicName)) { score += 5; }
+                      const color = score >= 80 ? "text-green-400" : score >= 50 ? "text-yellow-400" : "text-red-400";
+                      const bgColor = score >= 80 ? "bg-green-950/30 border-green-800/50" : score >= 50 ? "bg-yellow-950/30 border-yellow-800/50" : "bg-red-950/30 border-red-800/50";
+                      return (
+                        <div className={`p-3 ${bgColor} border rounded-xl space-y-1`}>
+                          <div className="flex items-center justify-between">
+                            <p className="text-[11px] font-bold text-gray-200">サムネイル品質スコア</p>
+                            <p className={`text-lg font-black ${color}`}>{score}<span className="text-[10px] text-gray-400">/100</span></p>
+                          </div>
+                          <div className="w-full bg-gray-700 rounded-full h-1.5">
+                            <div className={`h-1.5 rounded-full transition-all ${score >= 80 ? "bg-green-500" : score >= 50 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${score}%` }} />
+                          </div>
+                          {tips.length > 0 && (
+                            <div className="pt-1">
+                              {tips.map((tip, i) => <p key={i} className="text-[9px] text-gray-400">💡 {tip}</p>)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
