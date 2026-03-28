@@ -1022,6 +1022,110 @@ export default function VideoEditor() {
   const [generatedHashtags, setGeneratedHashtags] = useState<string[]>([]);
   const [captionGenerating, setCaptionGenerating] = useState(false);
 
+  // ===== ENDCARD =====
+  const ENDCARD_TEMPLATES = [
+    {
+      id: "youtube-subscribe",
+      name: "チャンネル登録促進",
+      desc: "登録ボタン＋高評価＋ベル通知",
+      texts: [
+        { text: "チャンネル登録お願いします!", fontSize: 36, bold: true, color: "#ffffff", bgColor: "#ff0000", y: 30, animation: "bounce-in" as TextAnimation },
+        { text: "高評価もよろしくお願いします", fontSize: 22, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.6)", y: 50, animation: "fade-in" as TextAnimation },
+        { text: "ベルマークを押すと通知が届きます", fontSize: 18, bold: false, color: "#ffdd00", bgColor: "transparent", y: 65, animation: "slide-up" as TextAnimation },
+      ],
+      stickers: [{ emoji: "🔔", x: 85, y: 15, size: 80, animation: "bounce" as StickerOverlay["animation"] }, { emoji: "👍", x: 15, y: 85, size: 60, animation: "pulse" as StickerOverlay["animation"] }],
+    },
+    {
+      id: "line-cta",
+      name: "LINE登録誘導",
+      desc: "LINE友だち追加＋特典案内",
+      texts: [
+        { text: "LINE友だち追加で特典GET!", fontSize: 32, bold: true, color: "#ffffff", bgColor: "#06C755", y: 30, animation: "bounce-in" as TextAnimation },
+        { text: "プロフィールのリンクから追加できます", fontSize: 20, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.6)", y: 50, animation: "fade-in" as TextAnimation },
+        { text: "初回限定クーポン配布中", fontSize: 22, bold: true, color: "#ffdd00", bgColor: "rgba(0,0,0,0.7)", y: 68, animation: "scale-up" as TextAnimation },
+      ],
+      stickers: [{ emoji: "🎁", x: 85, y: 25, size: 70, animation: "bounce" as StickerOverlay["animation"] }],
+    },
+    {
+      id: "reservation-cta",
+      name: "予約誘導",
+      desc: "今すぐ予約＋電話・Web",
+      texts: [
+        { text: "ご予約はお気軽にどうぞ", fontSize: 32, bold: true, color: "#ffffff", bgColor: "rgba(79,70,229,0.9)", y: 28, animation: "fade-in" as TextAnimation },
+        { text: "お電話またはWebから予約できます", fontSize: 20, bold: false, color: "#ffffff", bgColor: "rgba(0,0,0,0.6)", y: 48, animation: "fade-in" as TextAnimation },
+        { text: "初回限定の特別価格あり!", fontSize: 24, bold: true, color: "#ffdd00", bgColor: "rgba(0,0,0,0.7)", y: 65, animation: "bounce-in" as TextAnimation },
+      ],
+      stickers: [{ emoji: "📞", x: 15, y: 80, size: 50, animation: "pulse" as StickerOverlay["animation"] }, { emoji: "💻", x: 85, y: 80, size: 50, animation: "pulse" as StickerOverlay["animation"] }],
+    },
+    {
+      id: "next-video",
+      name: "次の動画へ誘導",
+      desc: "関連動画への誘導カード",
+      texts: [
+        { text: "こちらの動画もおすすめです", fontSize: 28, bold: true, color: "#ffffff", bgColor: "rgba(0,0,0,0.7)", y: 25, animation: "fade-in" as TextAnimation },
+        { text: "最後までご視聴ありがとうございました", fontSize: 20, bold: false, color: "#e0e0e0", bgColor: "transparent", y: 45, animation: "fade-in" as TextAnimation },
+      ],
+      stickers: [{ emoji: "▶️", x: 50, y: 70, size: 80, animation: "pulse" as StickerOverlay["animation"] }],
+    },
+    {
+      id: "thankyou",
+      name: "感謝メッセージ",
+      desc: "ご視聴感謝＋フォロー促進",
+      texts: [
+        { text: "ご視聴ありがとうございました!", fontSize: 34, bold: true, color: "#ffffff", bgColor: "transparent", outlineColor: "#000000", outlineWidth: 3, y: 30, animation: "fade-in" as TextAnimation },
+        { text: "フォロー＆いいねお願いします", fontSize: 22, bold: true, color: "#ff6b9d", bgColor: "rgba(0,0,0,0.5)", y: 55, animation: "slide-up" as TextAnimation },
+      ],
+      stickers: [{ emoji: "❤️", x: 50, y: 78, size: 70, animation: "pulse" as StickerOverlay["animation"] }],
+    },
+    {
+      id: "clinic-info",
+      name: "院情報カード",
+      desc: "院名・住所・連絡先を表示",
+      texts: [
+        { text: clinicProfile?.clinicName || "院名をここに", fontSize: 30, bold: true, color: "#ffffff", bgColor: "rgba(79,70,229,0.9)", y: 25, animation: "fade-in" as TextAnimation },
+        { text: clinicProfile?.area || "住所をここに", fontSize: 18, bold: false, color: "#e0e0e0", bgColor: "rgba(0,0,0,0.6)", y: 45, animation: "fade-in" as TextAnimation },
+        { text: "詳しくはプロフィールをご覧ください", fontSize: 20, bold: false, color: "#ffdd00", bgColor: "rgba(0,0,0,0.5)", y: 62, animation: "slide-up" as TextAnimation },
+      ],
+      stickers: [{ emoji: "🏥", x: 85, y: 20, size: 60, animation: "bounce" as StickerOverlay["animation"] }],
+    },
+  ];
+
+  const handleApplyEndcard = (templateIdx: number) => {
+    const tmpl = ENDCARD_TEMPLATES[templateIdx];
+    if (!tmpl) return;
+    const endStart = Math.max(0, duration - 8);
+    const endEnd = duration;
+
+    const newTexts: TextOverlay[] = tmpl.texts.map((t, i) => ({
+      id: `endcard-text-${Date.now()}-${i}`,
+      text: t.text,
+      x: 50, y: t.y,
+      fontSize: t.fontSize, fontFamily: "sans-serif",
+      color: t.color, bgColor: t.bgColor,
+      bold: t.bold, italic: false,
+      outlineColor: ("outlineColor" in t ? (t as any).outlineColor : "#000000"),
+      outlineWidth: ("outlineWidth" in t ? (t as any).outlineWidth : 0),
+      shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0,
+      startTime: endStart, endTime: endEnd,
+      animation: t.animation,
+      keyframes: [],
+    }));
+
+    const newStickers: StickerOverlay[] = tmpl.stickers.map((s, i) => ({
+      id: `endcard-sticker-${Date.now()}-${i}`,
+      emoji: s.emoji, x: s.x, y: s.y, size: s.size,
+      rotation: 0, startTime: endStart, endTime: endEnd,
+      opacity: 1, animation: s.animation, keyframes: [],
+    }));
+
+    const updatedOverlays = [...textOverlays, ...newTexts];
+    const updatedStickers = [...stickers, ...newStickers];
+    setTextOverlays(updatedOverlays);
+    setStickers(updatedStickers);
+    pushHistory({ textOverlays: updatedOverlays, subtitles, silentSegments, videoUrl, stickers: updatedStickers, filterSettings, transitionIn, transitionOut });
+    setProgressMsg(`エンドカード「${tmpl.name}」を適用しました（動画の最後${(endEnd - endStart).toFixed(0)}秒間）`);
+  };
+
   // ===== AUTO SUBTITLE =====
   const [autoSubtitleEnabled, setAutoSubtitleEnabled] = useState<boolean>(() => {
     try { return localStorage.getItem("videoforge_auto_subtitle") === "true"; } catch { return false; }
@@ -3461,6 +3565,7 @@ ${buildClinicContext(clinicProfile)}`
       tools: [
         { key: "template", label: "テンプレート", icon: "📋" },
         { key: "script", label: "AI台本", icon: "📝" },
+        { key: "endcard", label: "エンドカード", icon: "🔚" },
         { key: "clinic-profile", label: "院プロフィール", icon: "🏥" },
         { key: "collage", label: "コラージュ", icon: "🖼" },
         { key: "slideshow", label: "スライドショー", icon: "🎞" },
@@ -5305,6 +5410,33 @@ ${buildClinicContext(clinicProfile)}`
             <button onClick={handleApplyPip} disabled={processing||!videoFile||!pipSettings.file} className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-500 disabled:opacity-50 transition-colors">
               {processing ? "適用中..." : "ワイプを適用"}
             </button>
+          </div>
+        )}
+
+        {/* Endcard */}
+        {activeTool === "endcard" && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-gray-200">エンドカード / CTAカード</h3>
+            <p className="text-xs text-gray-400">動画の最後8秒間に自動配置されます。院プロフィールを設定すると院名が自動挿入されます。</p>
+            <div className="space-y-2">
+              {ENDCARD_TEMPLATES.map((tmpl, i) => (
+                <button key={tmpl.id} onClick={() => handleApplyEndcard(i)}
+                  className="w-full text-left p-3 bg-gray-800 rounded-xl hover:bg-gray-700 transition-colors border border-gray-700 hover:border-indigo-500">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{tmpl.stickers[0]?.emoji || "🔚"}</span>
+                    <div>
+                      <p className="text-sm font-medium text-gray-200">{tmpl.name}</p>
+                      <p className="text-[11px] text-gray-500">{tmpl.desc}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+            {duration > 0 && (
+              <p className="text-[10px] text-gray-600 text-center">
+                配置範囲: {Math.max(0, duration - 8).toFixed(1)}秒 〜 {duration.toFixed(1)}秒
+              </p>
+            )}
           </div>
         )}
 
