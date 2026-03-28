@@ -4037,6 +4037,9 @@ ${buildClinicContext(clinicProfile)}`
         <div className="flex items-center gap-3 mb-2">
           <button onClick={togglePlay} className="text-white text-sm">{isPlaying ? "⏸" : "▶"}</button>
           <span className="text-xs text-gray-400 font-mono">{formatTime(currentTime)} / {formatTime(duration)}</span>
+          {videoRef.current && videoRef.current.videoWidth > 0 && (
+            <span className="hidden lg:inline text-[9px] text-gray-600 ml-2">{videoRef.current.videoWidth}x{videoRef.current.videoHeight} | {videoFile ? `${(videoFile.size / (1024*1024)).toFixed(1)}MB` : ""}</span>
+          )}
           <span className="hidden lg:inline text-[9px] text-gray-600 ml-auto" title="Space:再生/停止  ←→:5秒送り  Shift+←→:1秒送り  Ctrl+Z:戻す  Ctrl+Shift+Z:やり直す">⌨ Space/←→/Ctrl+Z</span>
         </div>
         <div className="relative">
@@ -5011,6 +5014,29 @@ ${buildClinicContext(clinicProfile)}`
                       <input type="text" value={sub.text} onChange={(e) => setSubtitles((prev) => prev.map((s) => s.id === sub.id ? { ...s, text: e.target.value } : s))} className="w-full px-2 py-1 bg-gray-900 border border-gray-700 rounded text-xs text-white" />
                     </div>
                   ))}
+                </div>
+                {/* 字幕ファイルエクスポート */}
+                <div className="grid grid-cols-2 gap-1.5 pt-2">
+                  <button onClick={() => {
+                    const srt = subtitles.map((s, i) => {
+                      const fmt = (t: number) => { const h = Math.floor(t/3600); const m = Math.floor((t%3600)/60); const sec = Math.floor(t%60); const ms = Math.round((t%1)*1000); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')},${String(ms).padStart(3,'0')}`; };
+                      return `${i+1}\n${fmt(s.startTime)} --> ${fmt(s.endTime)}\n${s.text}\n`;
+                    }).join("\n");
+                    const blob = new Blob([srt], { type: "text/srt" });
+                    const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `subtitles_${Date.now()}.srt`; a.click(); URL.revokeObjectURL(url);
+                  }} className="py-2 bg-gray-800 text-gray-300 rounded-lg text-[10px] font-medium hover:bg-gray-700 transition-colors">
+                    📄 SRTダウンロード
+                  </button>
+                  <button onClick={() => {
+                    const vtt = "WEBVTT\n\n" + subtitles.map((s) => {
+                      const fmt = (t: number) => { const h = Math.floor(t/3600); const m = Math.floor((t%3600)/60); const sec = Math.floor(t%60); const ms = Math.round((t%1)*1000); return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}.${String(ms).padStart(3,'0')}`; };
+                      return `${fmt(s.startTime)} --> ${fmt(s.endTime)}\n${s.text}\n`;
+                    }).join("\n");
+                    const blob = new Blob([vtt], { type: "text/vtt" });
+                    const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `subtitles_${Date.now()}.vtt`; a.click(); URL.revokeObjectURL(url);
+                  }} className="py-2 bg-gray-800 text-gray-300 rounded-lg text-[10px] font-medium hover:bg-gray-700 transition-colors">
+                    📄 VTTダウンロード
+                  </button>
                 </div>
               </div>
             )}
