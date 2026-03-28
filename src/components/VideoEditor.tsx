@@ -918,6 +918,10 @@ interface HistoryState {
   subtitles: SubtitleEntry[];
   silentSegments: SilentSegment[];
   videoUrl: string;
+  stickers: StickerOverlay[];
+  filterSettings: FilterSettings;
+  transitionIn: TransitionSetting;
+  transitionOut: TransitionSetting;
 }
 
 // Default filter values - defined outside component to prevent reference instability
@@ -1071,6 +1075,10 @@ export default function VideoEditor() {
     setSubtitles(state.subtitles);
     setSilentSegments(state.silentSegments);
     if (state.videoUrl !== videoUrl) setVideoUrl(state.videoUrl);
+    setStickers(state.stickers);
+    setFilterSettings(state.filterSettings);
+    setTransitionIn(state.transitionIn);
+    setTransitionOut(state.transitionOut);
     setHistoryIndex(newIndex);
     historyIndexRef.current = newIndex;
     isApplyingHistory.current = false;
@@ -1086,6 +1094,10 @@ export default function VideoEditor() {
     setSubtitles(state.subtitles);
     setSilentSegments(state.silentSegments);
     if (state.videoUrl !== videoUrl) setVideoUrl(state.videoUrl);
+    setStickers(state.stickers);
+    setFilterSettings(state.filterSettings);
+    setTransitionIn(state.transitionIn);
+    setTransitionOut(state.transitionOut);
     setHistoryIndex(newIndex);
     historyIndexRef.current = newIndex;
     isApplyingHistory.current = false;
@@ -1121,7 +1133,7 @@ export default function VideoEditor() {
       const newUrl = URL.createObjectURL(blob);
       setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
       setVideoFile(newFile); setPlaybackSpeed(1);
-      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("速度変更完了!");
     } catch { setProgressMsg("速度変更に失敗しました"); } finally { setProcessing(false); }
   };
@@ -1166,7 +1178,7 @@ export default function VideoEditor() {
       const newUrl = URL.createObjectURL(blob);
       setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
       setVideoFile(newFile); setClipMarkers([]);
-      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("分割・並び替え完了!");
     } catch { setProgressMsg("分割処理に失敗しました"); } finally { setProcessing(false); }
   };
@@ -1192,7 +1204,7 @@ export default function VideoEditor() {
       const newUrl = URL.createObjectURL(blob);
       setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
       setVideoFile(newFile);
-      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("フィルター適用完了!");
     } catch { setProgressMsg("フィルター適用に失敗しました"); } finally { setProcessing(false); }
   };
@@ -1221,7 +1233,7 @@ export default function VideoEditor() {
       const newUrl = URL.createObjectURL(blob);
       setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
       setVideoFile(newFile);
-      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("トランジション適用完了!");
     } catch { setProgressMsg("トランジション適用に失敗しました"); } finally { setProcessing(false); }
   };
@@ -1254,11 +1266,27 @@ export default function VideoEditor() {
 
   const addSticker = (emoji: string) => {
     const newSticker: StickerOverlay = { id: `sticker-${Date.now()}`, emoji, x: 50, y: 50, size: 64, rotation: 0, startTime: currentTime, endTime: Math.min(currentTime + 5, duration || currentTime + 5), opacity: 1, animation: "none", keyframes: [] };
-    setStickers((prev) => [...prev, newSticker]);
+    const newStickers = [...stickers, newSticker];
+    setStickers(newStickers);
     setEditingStickerId(newSticker.id);
+    pushHistory({ textOverlays, subtitles, silentSegments, videoUrl, stickers: newStickers, filterSettings, transitionIn, transitionOut });
   };
-  const updateSticker = (id: string, updates: Partial<StickerOverlay>) => setStickers((prev) => prev.map((s) => s.id === id ? { ...s, ...updates } : s));
-  const deleteSticker = (id: string) => { setStickers((prev) => prev.filter((s) => s.id !== id)); if (editingStickerId === id) setEditingStickerId(null); };
+  const updateSticker = (id: string, updates: Partial<StickerOverlay>) => {
+    const newStickers = stickers.map((s) => s.id === id ? { ...s, ...updates } : s);
+    setStickers(newStickers);
+    pushHistory({ textOverlays, subtitles, silentSegments, videoUrl, stickers: newStickers, filterSettings, transitionIn, transitionOut });
+  };
+  const deleteSticker = (id: string) => {
+    const newStickers = stickers.filter((s) => s.id !== id);
+    setStickers(newStickers);
+    if (editingStickerId === id) setEditingStickerId(null);
+    pushHistory({ textOverlays, subtitles, silentSegments, videoUrl, stickers: newStickers, filterSettings, transitionIn, transitionOut });
+  };
+
+  // Helper: push current state to history (used by filter/transition UI)
+  const pushCurrentHistory = useCallback(() => {
+    pushHistory({ textOverlays, subtitles, silentSegments, videoUrl, stickers, filterSettings, transitionIn, transitionOut });
+  }, [pushHistory, textOverlays, subtitles, silentSegments, videoUrl, stickers, filterSettings, transitionIn, transitionOut]);
 
   // ===== COLLAGE =====
   const COLLAGE_LAYOUT_OPTIONS: { key: CollageLayout; label: string; count: number; icon: string }[] = [
@@ -1302,7 +1330,7 @@ export default function VideoEditor() {
       const newUrl = URL.createObjectURL(blob);
       setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
       setVideoFile(newFile);
-      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("コラージュ作成完了!");
     } catch { setProgressMsg("コラージュ作成に失敗しました"); } finally { setProcessing(false); }
   };
@@ -1338,7 +1366,7 @@ export default function VideoEditor() {
       const newUrl = URL.createObjectURL(blob);
       setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
       setVideoFile(newFile);
-      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("スライドショー作成完了!");
     } catch { setProgressMsg("スライドショー作成に失敗しました"); } finally { setProcessing(false); }
   };
@@ -1359,7 +1387,7 @@ export default function VideoEditor() {
       const newUrl = URL.createObjectURL(blob);
       setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
       setVideoFile(newFile);
-      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("ワイプ適用完了!");
     } catch { setProgressMsg("ワイプ適用に失敗しました"); } finally { setProcessing(false); }
   };
@@ -1406,7 +1434,7 @@ export default function VideoEditor() {
       const newUrl = URL.createObjectURL(blob);
       setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
       setVideoFile(newFile);
-      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("モザイク適用完了!");
     } catch { setProgressMsg("モザイク適用に失敗しました"); } finally { setProcessing(false); }
   };
@@ -1433,7 +1461,7 @@ export default function VideoEditor() {
       const newUrl = URL.createObjectURL(blob);
       setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
       setVideoFile(newFile);
-      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("クロマキー適用完了!");
     } catch { setProgressMsg("クロマキー適用に失敗しました"); } finally { setProcessing(false); }
   };
@@ -1465,7 +1493,7 @@ export default function VideoEditor() {
       const newUrl = URL.createObjectURL(blob);
       setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
       setVideoFile(newFile);
-      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("ロゴ合成完了!");
     } catch { setProgressMsg("ロゴ合成に失敗しました"); } finally { setProcessing(false); }
   };
@@ -1519,8 +1547,11 @@ export default function VideoEditor() {
       keyframes: [],
     }));
 
-    setTextOverlays((prev) => [...prev, ...newTexts]);
-    setStickers((prev) => [...prev, ...newStickers]);
+    const updatedOverlays = [...textOverlays, ...newTexts];
+    const updatedStickers = [...stickers, ...newStickers];
+    setTextOverlays(updatedOverlays);
+    setStickers(updatedStickers);
+    pushHistory({ textOverlays: updatedOverlays, subtitles, silentSegments, videoUrl, stickers: updatedStickers, filterSettings, transitionIn, transitionOut });
 
     if (template.aspectRatio !== undefined) {
       setSelectedPresetIdx(template.aspectRatio);
@@ -2235,6 +2266,8 @@ ${buildClinicContext(clinicProfile)}`
     try { localStorage.removeItem(AUTOSAVE_KEY); } catch {}
     setTextOverlays([]); setSubtitles([]); setClipMarkers([]); setFilterSettings({ ...DEFAULT_FILTERS });
     setStickers([]); setMosaicAreas([]); setTrimStart(0); setTrimEnd(duration);
+    setTransitionIn({ ...DEFAULT_TRANSITION }); setTransitionOut({ ...DEFAULT_TRANSITION });
+    pushHistory({ textOverlays: [], subtitles: [], silentSegments: [], videoUrl, stickers: [], filterSettings: { ...DEFAULT_FILTERS }, transitionIn: { ...DEFAULT_TRANSITION }, transitionOut: { ...DEFAULT_TRANSITION } });
     setProgressMsg("プロジェクトをリセットしました");
   };
 
@@ -2414,7 +2447,8 @@ ${buildClinicContext(clinicProfile)}`
     setVideoUrl(url);
     setSilentSegments([]); setTextOverlays([]); setSubtitles([]); setClipMarkers([]);
     setFilterSettings({ brightness: 100, contrast: 100, saturation: 100, temperature: 0, vignette: 0 }); setMosaicAreas([]);
-    setHistory([{ textOverlays: [], subtitles: [], silentSegments: [], videoUrl: url }]);
+    setStickers([]);
+    setHistory([{ textOverlays: [], subtitles: [], silentSegments: [], videoUrl: url, stickers: [], filterSettings: { ...DEFAULT_FILTERS }, transitionIn: { ...DEFAULT_TRANSITION }, transitionOut: { ...DEFAULT_TRANSITION } }]);
     setHistoryIndex(0);
     historyIndexRef.current = 0;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2484,7 +2518,7 @@ ${buildClinicContext(clinicProfile)}`
       const newUrl = URL.createObjectURL(blob);
       setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
       setVideoFile(newFile); setSilentSegments([]);
-      pushHistory({ textOverlays, subtitles, silentSegments: [], videoUrl: newUrl });
+      pushHistory({ textOverlays, subtitles, silentSegments: [], videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("無音カット完了!");
     } catch (e) { setProgressMsg(`無音カットに失敗: ${e instanceof Error ? e.message : String(e)}`); } finally { setProcessing(false); }
   };
@@ -2499,7 +2533,7 @@ ${buildClinicContext(clinicProfile)}`
       const newUrl = URL.createObjectURL(blob);
       setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
       setVideoFile(newFile);
-      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("トリミング完了!");
     } catch { setProgressMsg("トリミングに失敗しました"); } finally { setProcessing(false); }
   };
@@ -2516,7 +2550,7 @@ ${buildClinicContext(clinicProfile)}`
     };
     const newOverlays = [...textOverlays, newText];
     setTextOverlays(newOverlays); setEditingTextId(newText.id);
-    pushHistory({ textOverlays: newOverlays, subtitles, silentSegments, videoUrl });
+    pushHistory({ textOverlays: newOverlays, subtitles, silentSegments, videoUrl, stickers, filterSettings, transitionIn, transitionOut });
   };
 
   const updateTextOverlay = (id: string, updates: Partial<TextOverlay>) => {
@@ -2527,7 +2561,7 @@ ${buildClinicContext(clinicProfile)}`
     const newOverlays = textOverlays.filter((t) => t.id !== id);
     setTextOverlays(newOverlays);
     if (editingTextId === id) setEditingTextId(null);
-    pushHistory({ textOverlays: newOverlays, subtitles, silentSegments, videoUrl });
+    pushHistory({ textOverlays: newOverlays, subtitles, silentSegments, videoUrl, stickers, filterSettings, transitionIn, transitionOut });
   };
 
   const startVoiceRecognition = () => {
@@ -2641,7 +2675,7 @@ ${buildClinicContext(clinicProfile)}`
       const newUrl = URL.createObjectURL(blob);
       setVideoUrl((prev) => { if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev); return newUrl; });
       setVideoFile(newFile);
-      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl });
+      pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("BGM追加完了!");
     } catch { setProgressMsg("BGM追加に失敗しました"); } finally { setProcessing(false); }
   };
@@ -3428,8 +3462,8 @@ ${buildClinicContext(clinicProfile)}`
           <span className="text-lg font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">VF</span>
           <button onClick={() => fileInputRef.current?.click()} className="text-xs px-3 py-1.5 bg-gray-800 rounded-lg text-gray-300 hover:bg-gray-700">別の動画</button>
           <input ref={fileInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
-          <button onClick={handleUndo} disabled={historyIndex <= 0} title="元に戻す (Ctrl+Z)" className="text-xs px-2 py-1.5 bg-gray-800 rounded-lg text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed">↩</button>
-          <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} title="やり直す (Ctrl+Shift+Z)" className="text-xs px-2 py-1.5 bg-gray-800 rounded-lg text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed">↪</button>
+          <button onClick={handleUndo} disabled={historyIndex <= 0} title="元に戻す (Ctrl+Z)" className="text-xs px-2 py-1.5 bg-gray-800 rounded-lg text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed">↩ 戻す</button>
+          <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} title="やり直す (Ctrl+Shift+Z)" className="text-xs px-2 py-1.5 bg-gray-800 rounded-lg text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed">↪ やり直す</button>
           <button onClick={handleResetProject} className="text-xs px-2 py-1.5 bg-gray-800 rounded-lg text-red-400 hover:bg-gray-700">リセット</button>
           {autoSaved && <span className="text-[10px] text-green-400 animate-pulse">💾 保存済み</span>}
         </div>
@@ -4425,7 +4459,7 @@ ${buildClinicContext(clinicProfile)}`
               <label className="text-xs text-gray-400 block mb-2">プリセット</label>
               <div className="grid grid-cols-3 gap-1.5">
                 {FILTER_PRESETS.map((preset) => (
-                  <button key={preset.label} onClick={() => setFilterSettings({ ...preset.settings })} className={`py-2 px-1 rounded-xl text-xs font-medium transition-all ${JSON.stringify(filterSettings)===JSON.stringify(preset.settings)?"bg-indigo-600 text-white":"bg-gray-800 text-gray-300 hover:bg-gray-700"}`}>{preset.label}</button>
+                  <button key={preset.label} onClick={() => { setFilterSettings({ ...preset.settings }); pushHistory({ textOverlays, subtitles, silentSegments, videoUrl, stickers, filterSettings: { ...preset.settings }, transitionIn, transitionOut }); }} className={`py-2 px-1 rounded-xl text-xs font-medium transition-all ${JSON.stringify(filterSettings)===JSON.stringify(preset.settings)?"bg-indigo-600 text-white":"bg-gray-800 text-gray-300 hover:bg-gray-700"}`}>{preset.label}</button>
                 ))}
               </div>
             </div>
@@ -4433,20 +4467,20 @@ ${buildClinicContext(clinicProfile)}`
               {[{key:"brightness",label:"明るさ",min:0,max:200},{key:"contrast",label:"コントラスト",min:0,max:200},{key:"saturation",label:"彩度",min:0,max:200}].map((s) => (
                 <div key={s.key}>
                   <label className="text-xs text-gray-400 block mb-1">{s.label} ({(filterSettings as any)[s.key]}%)</label>
-                  <input type="range" min={s.min} max={s.max} value={(filterSettings as any)[s.key]} onChange={(e) => setFilterSettings((p) => ({ ...p, [s.key]: parseInt(e.target.value) }))} className="w-full" />
+                  <input type="range" min={s.min} max={s.max} value={(filterSettings as any)[s.key]} onChange={(e) => setFilterSettings((p) => ({ ...p, [s.key]: parseInt(e.target.value) }))} onPointerUp={pushCurrentHistory} className="w-full" />
                 </div>
               ))}
               <div>
                 <label className="text-xs text-gray-400 block mb-1">色温度 ({filterSettings.temperature > 0 ? `+${filterSettings.temperature}` : filterSettings.temperature}){filterSettings.temperature>0?" 暖かい":filterSettings.temperature<0?" クール":""}</label>
-                <input type="range" min={-100} max={100} value={filterSettings.temperature} onChange={(e) => setFilterSettings((p) => ({ ...p, temperature: parseInt(e.target.value) }))} className="w-full" />
+                <input type="range" min={-100} max={100} value={filterSettings.temperature} onChange={(e) => setFilterSettings((p) => ({ ...p, temperature: parseInt(e.target.value) }))} onPointerUp={pushCurrentHistory} className="w-full" />
               </div>
               <div>
                 <label className="text-xs text-gray-400 block mb-1">ビネット ({filterSettings.vignette}%)</label>
-                <input type="range" min={0} max={100} value={filterSettings.vignette} onChange={(e) => setFilterSettings((p) => ({ ...p, vignette: parseInt(e.target.value) }))} className="w-full" />
+                <input type="range" min={0} max={100} value={filterSettings.vignette} onChange={(e) => setFilterSettings((p) => ({ ...p, vignette: parseInt(e.target.value) }))} onPointerUp={pushCurrentHistory} className="w-full" />
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setFilterSettings({ ...DEFAULT_FILTERS })} className="flex-1 py-2.5 bg-gray-800 text-gray-300 rounded-xl text-sm hover:bg-gray-700 transition-colors">リセット</button>
+              <button onClick={() => { setFilterSettings({ ...DEFAULT_FILTERS }); pushHistory({ textOverlays, subtitles, silentSegments, videoUrl, stickers, filterSettings: { ...DEFAULT_FILTERS }, transitionIn, transitionOut }); }} className="flex-1 py-2.5 bg-gray-800 text-gray-300 rounded-xl text-sm hover:bg-gray-700 transition-colors">リセット</button>
               <button onClick={handleApplyFiltersExport} disabled={processing} className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-500 disabled:opacity-50 transition-colors">{processing ? "処理中..." : "動画に適用"}</button>
             </div>
           </div>
@@ -4459,7 +4493,7 @@ ${buildClinicContext(clinicProfile)}`
               <p className="text-xs font-semibold text-indigo-300">動画の開始</p>
               <div className="grid grid-cols-3 gap-1.5">
                 {TRANSITION_TYPES.map((t) => (
-                  <button key={t.value} onClick={() => setTransitionIn((prev) => ({ ...prev, type: t.value }))} className={`py-2 px-1 rounded-xl text-xs font-medium transition-all flex flex-col items-center gap-0.5 ${transitionIn.type===t.value?"bg-indigo-600 text-white":"bg-gray-700 text-gray-300 hover:bg-gray-600"}`}>
+                  <button key={t.value} onClick={() => { const newT = { ...transitionIn, type: t.value }; setTransitionIn(newT); pushHistory({ textOverlays, subtitles, silentSegments, videoUrl, stickers, filterSettings, transitionIn: newT, transitionOut }); }} className={`py-2 px-1 rounded-xl text-xs font-medium transition-all flex flex-col items-center gap-0.5 ${transitionIn.type===t.value?"bg-indigo-600 text-white":"bg-gray-700 text-gray-300 hover:bg-gray-600"}`}>
                     <span className="text-base">{t.icon}</span><span>{t.label}</span>
                   </button>
                 ))}
@@ -4467,7 +4501,7 @@ ${buildClinicContext(clinicProfile)}`
               {transitionIn.type !== "none" && (
                 <div>
                   <label className="text-[10px] text-gray-500 block mb-1">デュレーション ({transitionIn.duration.toFixed(1)}秒)</label>
-                  <input type="range" min={0.3} max={2.0} step={0.1} value={transitionIn.duration} onChange={(e) => setTransitionIn((prev) => ({ ...prev, duration: parseFloat(e.target.value) }))} className="w-full" />
+                  <input type="range" min={0.3} max={2.0} step={0.1} value={transitionIn.duration} onChange={(e) => setTransitionIn((prev) => ({ ...prev, duration: parseFloat(e.target.value) }))} onPointerUp={pushCurrentHistory} className="w-full" />
                 </div>
               )}
             </div>
@@ -4475,7 +4509,7 @@ ${buildClinicContext(clinicProfile)}`
               <p className="text-xs font-semibold text-purple-300">動画の終了</p>
               <div className="grid grid-cols-3 gap-1.5">
                 {TRANSITION_TYPES.map((t) => (
-                  <button key={t.value} onClick={() => setTransitionOut((prev) => ({ ...prev, type: t.value }))} className={`py-2 px-1 rounded-xl text-xs font-medium transition-all flex flex-col items-center gap-0.5 ${transitionOut.type===t.value?"bg-purple-600 text-white":"bg-gray-700 text-gray-300 hover:bg-gray-600"}`}>
+                  <button key={t.value} onClick={() => { const newT = { ...transitionOut, type: t.value }; setTransitionOut(newT); pushHistory({ textOverlays, subtitles, silentSegments, videoUrl, stickers, filterSettings, transitionIn, transitionOut: newT }); }} className={`py-2 px-1 rounded-xl text-xs font-medium transition-all flex flex-col items-center gap-0.5 ${transitionOut.type===t.value?"bg-purple-600 text-white":"bg-gray-700 text-gray-300 hover:bg-gray-600"}`}>
                     <span className="text-base">{t.icon}</span><span>{t.label}</span>
                   </button>
                 ))}
@@ -4483,7 +4517,7 @@ ${buildClinicContext(clinicProfile)}`
               {transitionOut.type !== "none" && (
                 <div>
                   <label className="text-[10px] text-gray-500 block mb-1">デュレーション ({transitionOut.duration.toFixed(1)}秒)</label>
-                  <input type="range" min={0.3} max={2.0} step={0.1} value={transitionOut.duration} onChange={(e) => setTransitionOut((prev) => ({ ...prev, duration: parseFloat(e.target.value) }))} className="w-full" />
+                  <input type="range" min={0.3} max={2.0} step={0.1} value={transitionOut.duration} onChange={(e) => setTransitionOut((prev) => ({ ...prev, duration: parseFloat(e.target.value) }))} onPointerUp={pushCurrentHistory} className="w-full" />
                 </div>
               )}
             </div>
