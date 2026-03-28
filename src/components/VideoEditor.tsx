@@ -1251,7 +1251,7 @@ export default function VideoEditor() {
       setVideoFile(newFile); setPlaybackSpeed(1);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("速度変更完了!");
-    } catch { setProgressMsg("速度変更に失敗しました"); } finally { setProcessing(false); }
+    } catch (e) { setProgressMsg(`速度変更に失敗: ${e instanceof Error ? e.message : "不明なエラー"}`); console.error("速度変更 error:", e); } finally { setProcessing(false); }
   };
 
   // ===== SPLIT & REORDER =====
@@ -1296,7 +1296,7 @@ export default function VideoEditor() {
       setVideoFile(newFile); setClipMarkers([]);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("分割・並び替え完了!");
-    } catch { setProgressMsg("分割処理に失敗しました"); } finally { setProcessing(false); }
+    } catch (e) { setProgressMsg(`分割処理に失敗: ${e instanceof Error ? e.message : "不明なエラー"}`); console.error("分割処理 error:", e); } finally { setProcessing(false); }
   };
 
   // ===== FILTERS =====
@@ -1322,7 +1322,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("フィルター適用完了!");
-    } catch { setProgressMsg("フィルター適用に失敗しました"); } finally { setProcessing(false); }
+    } catch (e) { setProgressMsg(`フィルター適用に失敗: ${e instanceof Error ? e.message : "不明なエラー"}`); console.error("フィルター適用 error:", e); } finally { setProcessing(false); }
   };
 
   // ===== TRANSITIONS =====
@@ -1351,7 +1351,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("トランジション適用完了!");
-    } catch { setProgressMsg("トランジション適用に失敗しました"); } finally { setProcessing(false); }
+    } catch (e) { setProgressMsg(`トランジション適用に失敗: ${e instanceof Error ? e.message : "不明なエラー"}`); console.error("トランジション適用 error:", e); } finally { setProcessing(false); }
   };
 
   useEffect(() => {
@@ -1448,7 +1448,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("コラージュ作成完了!");
-    } catch { setProgressMsg("コラージュ作成に失敗しました"); } finally { setProcessing(false); }
+    } catch (e) { setProgressMsg(`コラージュ作成に失敗: ${e instanceof Error ? e.message : "不明なエラー"}`); console.error("コラージュ作成 error:", e); } finally { setProcessing(false); }
   };
 
   // ===== SLIDESHOW =====
@@ -1484,7 +1484,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("スライドショー作成完了!");
-    } catch { setProgressMsg("スライドショー作成に失敗しました"); } finally { setProcessing(false); }
+    } catch (e) { setProgressMsg(`スライドショー作成に失敗: ${e instanceof Error ? e.message : "不明なエラー"}`); console.error("スライドショー作成 error:", e); } finally { setProcessing(false); }
   };
 
   // ===== PIP =====
@@ -1505,7 +1505,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("ワイプ適用完了!");
-    } catch { setProgressMsg("ワイプ適用に失敗しました"); } finally { setProcessing(false); }
+    } catch (e) { setProgressMsg(`ワイプ適用に失敗: ${e instanceof Error ? e.message : "不明なエラー"}`); console.error("ワイプ適用 error:", e); } finally { setProcessing(false); }
   };
 
   // ===== GIF EXPORT =====
@@ -1524,7 +1524,7 @@ export default function VideoEditor() {
         const a = document.createElement("a"); a.href = url; a.download = `videoforge_${Date.now()}.gif`; a.click();
         setProgressMsg("GIF書き出し完了!");
       } finally { URL.revokeObjectURL(url); }
-    } catch { setProgressMsg("GIF書き出しに失敗しました"); } finally { setProcessing(false); }
+    } catch (e) { setProgressMsg(`GIF書き出しに失敗: ${e instanceof Error ? e.message : "不明なエラー"}`); console.error("GIF書き出し error:", e); } finally { setProcessing(false); }
   };
 
   // ===== MOSAIC =====
@@ -1553,7 +1553,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("モザイク適用完了!");
-    } catch { setProgressMsg("モザイク適用に失敗しました"); } finally { setProcessing(false); }
+    } catch (e) { setProgressMsg(`モザイク適用に失敗: ${e instanceof Error ? e.message : "不明なエラー"}`); console.error("モザイク適用 error:", e); } finally { setProcessing(false); }
   };
 
   // ===== CHROMA KEY =====
@@ -1580,7 +1580,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("クロマキー適用完了!");
-    } catch { setProgressMsg("クロマキー適用に失敗しました"); } finally { setProcessing(false); }
+    } catch (e) { setProgressMsg(`クロマキー適用に失敗: ${e instanceof Error ? e.message : "不明なエラー"}`); console.error("クロマキー適用 error:", e); } finally { setProcessing(false); }
   };
 
   // ===== LOGO =====
@@ -1612,7 +1612,7 @@ export default function VideoEditor() {
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("ロゴ合成完了!");
-    } catch { setProgressMsg("ロゴ合成に失敗しました"); } finally { setProcessing(false); }
+    } catch (e) { setProgressMsg(`ロゴ合成に失敗: ${e instanceof Error ? e.message : "不明なエラー"}`); console.error("ロゴ合成 error:", e); } finally { setProcessing(false); }
   };
 
   // ===== TEMPLATE =====
@@ -2560,6 +2560,7 @@ ${buildClinicContext(clinicProfile)}`
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mosaicCanvasRef = useRef<HTMLCanvasElement | null>(null); // cached for performance
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bgmInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -2581,7 +2582,25 @@ ${buildClinicContext(clinicProfile)}`
     } finally { setFfmpegLoading(false); }
   }, [ffmpegLoaded]);
 
+  const MAX_FILE_SIZE_MB = 500;
+  const SUPPORTED_FORMATS = ["video/mp4", "video/webm", "video/quicktime", "video/x-msvideo", "video/x-matroska"];
+
   const loadVideoFile = useCallback((file: File) => {
+    // ファイルサイズ検証
+    const sizeMB = file.size / (1024 * 1024);
+    if (sizeMB > MAX_FILE_SIZE_MB) {
+      setProgressMsg(`ファイルサイズが大きすぎます（${sizeMB.toFixed(0)}MB）。${MAX_FILE_SIZE_MB}MB以下の動画を使用してください。`);
+      return;
+    }
+    // フォーマット検証
+    if (file.type && !SUPPORTED_FORMATS.includes(file.type)) {
+      setProgressMsg(`非対応のファイル形式です（${file.type}）。MP4・WebM・MOV形式をお使いください。`);
+      return;
+    }
+    // 100MB以上は警告表示
+    if (sizeMB > 100) {
+      setProgressMsg(`大きなファイル（${sizeMB.toFixed(0)}MB）を読み込みます。処理に時間がかかる場合があります。`);
+    }
     // Revoke old blob URL to prevent memory leak
     setVideoUrl((prevUrl) => {
       if (prevUrl && prevUrl.startsWith("blob:")) {
@@ -2637,7 +2656,7 @@ ${buildClinicContext(clinicProfile)}`
           if (tmpl && tmpl.textOverlayPresets) {
             const newTexts: TextOverlay[] = tmpl.textOverlayPresets.map((p: any, i: number) => ({
               id: `viral-${Date.now()}-${i}`,
-              text: (p.text || "").replace("{院名}", clinicProfile?.clinicName || "当院").replace("{地域}", clinicProfile?.area || ""),
+              text: (p.text || "").replace("{院名}", clinicProfile?.clinicName || "当院").replace("{地域}", clinicProfile?.area || "").replace("{電話番号}", clinicProfile?.phone || "").replace("{予約URL}", clinicProfile?.bookingUrl || "").replace("{LINE}", clinicProfile?.lineUrl || ""),
               x: p.x ?? 50, y: p.y ?? (20 + i * 15),
               fontSize: p.fontSize ?? 28, fontFamily: p.fontFamily ?? "sans-serif",
               color: p.color ?? "#ffffff", bgColor: p.bgColor ?? "rgba(0,0,0,0.6)",
@@ -2749,7 +2768,7 @@ ${buildClinicContext(clinicProfile)}`
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("トリミング完了!");
-    } catch { setProgressMsg("トリミングに失敗しました"); } finally { setProcessing(false); }
+    } catch (e) { setProgressMsg(`トリミングに失敗: ${e instanceof Error ? e.message : "不明なエラー"}`); console.error("トリミング error:", e); } finally { setProcessing(false); }
   };
 
   const addTextOverlay = () => {
@@ -2893,7 +2912,7 @@ ${buildClinicContext(clinicProfile)}`
       setVideoFile(newFile);
       pushHistory({ textOverlays, subtitles, silentSegments, videoUrl: newUrl, stickers, filterSettings, transitionIn, transitionOut });
       setProgressMsg("BGM追加完了!");
-    } catch { setProgressMsg("BGM追加に失敗しました"); } finally { setProcessing(false); }
+    } catch (e) { setProgressMsg(`BGM追加に失敗: ${e instanceof Error ? e.message : "不明なエラー"}`); console.error("BGM追加 error:", e); } finally { setProcessing(false); }
   };
 
   const bgmLibraryUrlRef = useRef<string | null>(null);
@@ -2957,7 +2976,7 @@ ${buildClinicContext(clinicProfile)}`
       const a = document.createElement("a"); a.href = url; a.download = `videoforge_${preset.platform}_${Date.now()}.mp4`; a.click();
       URL.revokeObjectURL(url);
       setProgressMsg("エクスポート完了!");
-    } catch { setProgressMsg("エクスポートに失敗しました"); } finally { setProcessing(false); }
+    } catch (e) { setProgressMsg(`エクスポートに失敗: ${e instanceof Error ? e.message : "不明なエラー"}`); console.error("エクスポート error:", e); } finally { setProcessing(false); }
   };
 
   const handleDownloadOriginal = () => {
@@ -3020,17 +3039,17 @@ ${buildClinicContext(clinicProfile)}`
           ctx.fillStyle = "rgba(0,0,0,1)";
           ctx.fillRect(ax, ay, aw, ah);
         } else if (area.type === "blur") {
-          // Get pixel data, draw scaled down/up
           try {
+            if (!mosaicCanvasRef.current) mosaicCanvasRef.current = document.createElement("canvas");
+            const tc = mosaicCanvasRef.current;
             const imageData = ctx.getImageData(ax, ay, aw, ah);
-            const tempCanvas = document.createElement("canvas");
             const blurAmount = area.intensity;
-            tempCanvas.width = aw; tempCanvas.height = ah;
-            const tCtx = tempCanvas.getContext("2d")!;
+            tc.width = aw; tc.height = ah;
+            const tCtx = tc.getContext("2d")!;
             tCtx.filter = `blur(${blurAmount}px)`;
             tCtx.putImageData(imageData, 0, 0);
-            tCtx.drawImage(tempCanvas, 0, 0);
-            ctx.drawImage(tempCanvas, ax, ay);
+            tCtx.drawImage(tc, 0, 0);
+            ctx.drawImage(tc, ax, ay);
           } catch {
             ctx.fillStyle = `rgba(128,128,128,0.7)`;
             ctx.fillRect(ax, ay, aw, ah);
@@ -3039,15 +3058,16 @@ ${buildClinicContext(clinicProfile)}`
           // mosaic: pixelate
           const blockSize = Math.max(2, area.intensity);
           try {
+            if (!mosaicCanvasRef.current) mosaicCanvasRef.current = document.createElement("canvas");
+            const tc = mosaicCanvasRef.current;
             const scaledW = Math.max(1, Math.round(aw / blockSize));
             const scaledH = Math.max(1, Math.round(ah / blockSize));
-            const tempCanvas = document.createElement("canvas");
-            tempCanvas.width = scaledW; tempCanvas.height = scaledH;
-            const tCtx = tempCanvas.getContext("2d")!;
+            tc.width = scaledW; tc.height = scaledH;
+            const tCtx = tc.getContext("2d")!;
             tCtx.imageSmoothingEnabled = false;
             tCtx.drawImage(canvas, ax, ay, aw, ah, 0, 0, scaledW, scaledH);
             ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(tempCanvas, 0, 0, scaledW, scaledH, ax, ay, aw, ah);
+            ctx.drawImage(tc, 0, 0, scaledW, scaledH, ax, ay, aw, ah);
             ctx.imageSmoothingEnabled = true;
           } catch {
             ctx.fillStyle = "rgba(0,0,0,0.5)";
@@ -4250,7 +4270,7 @@ ${buildClinicContext(clinicProfile)}`
                   let accTime = startT;
                   const newTexts: TextOverlay[] = template.scriptStructure.map((seg, i) => ({
                     id: `viral-${Date.now()}-${i}`,
-                    text: seg.text.replace(/\{院名\}/g, clinicProfile?.clinicName || "{院名}").replace(/\{先生名\}/g, clinicProfile?.clinicName?.replace(/整体院|治療院|鍼灸院|接骨院|整骨院/g, "").trim() || "{先生名}").replace(/\{症状\}/g, clinicProfile?.specialties?.[0] || "{症状}").replace(/\{地域\}/g, clinicProfile?.area || "{地域}"),
+                    text: seg.text.replace(/\{院名\}/g, clinicProfile?.clinicName || "{院名}").replace(/\{先生名\}/g, clinicProfile?.clinicName?.replace(/整体院|治療院|鍼灸院|接骨院|整骨院/g, "").trim() || "{先生名}").replace(/\{症状\}/g, clinicProfile?.specialties?.[0] || "{症状}").replace(/\{地域\}/g, clinicProfile?.area || "{地域}").replace(/\{電話番号\}/g, clinicProfile?.phone || "{電話番号}").replace(/\{予約URL\}/g, clinicProfile?.bookingUrl || "{予約URL}").replace(/\{LINE\}/g, clinicProfile?.lineUrl || "{LINE}"),
                     x: 50,
                     y: seg.type === "hook" ? 50 : seg.type === "cta" ? 85 : 80,
                     fontSize: seg.type === "hook" ? 36 : seg.type === "cta" ? 28 : 24,
@@ -5922,6 +5942,7 @@ ${buildClinicContext(clinicProfile)}`
                 {/* 画像アップロード */}
                 <div className="space-y-2">
                   <label className="text-xs text-gray-400 block">画像を使う（任意）</label>
+                  <p className="text-[9px] text-yellow-500/80 bg-yellow-500/10 border border-yellow-500/20 rounded px-2 py-1">⚠️ 患者の顔写真を使用する場合は必ず書面で同意を取得し、個人が特定できないよう加工してください</p>
                   <div className="grid grid-cols-1 gap-1.5">
                     <div>
                       <input ref={thumbnailOverlayRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
