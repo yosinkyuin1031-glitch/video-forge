@@ -991,6 +991,11 @@ export default function VideoEditor() {
     try { return !!localStorage.getItem("videoforge_whisper_key"); } catch { return false; }
   });
 
+  // Whisper settings
+  const [whisperLang, setWhisperLang] = useState<string>("ja");
+  const [whisperPrompt, setWhisperPrompt] = useState<string>("");
+  const [whisperTemperature, setWhisperTemperature] = useState<number>(0);
+
   // ===== AI SCRIPT =====
   const [scriptTopic, setScriptTopic] = useState("");
   const [scriptDuration, setScriptDuration] = useState<"short" | "medium" | "long">("medium");
@@ -2760,9 +2765,11 @@ ${buildClinicContext(clinicProfile)}`
       const formData = new FormData();
       formData.append("file", audioBlob, "audio.wav");
       formData.append("model", "whisper-1");
-      formData.append("language", "ja");
+      formData.append("language", whisperLang);
       formData.append("response_format", "verbose_json");
       formData.append("timestamp_granularities[]", "segment");
+      if (whisperPrompt) formData.append("prompt", whisperPrompt);
+      if (whisperTemperature > 0) formData.append("temperature", String(whisperTemperature));
 
       const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
         method: "POST",
@@ -4459,6 +4466,31 @@ ${buildClinicContext(clinicProfile)}`
                       </button>
                     </div>
                   )}
+                </div>
+                {/* Whisper詳細設定 */}
+                <div className="bg-gray-800 rounded-xl p-3 space-y-2">
+                  <p className="text-xs font-medium text-gray-300">認識設定</p>
+                  <div>
+                    <label className="text-[10px] text-gray-500 block mb-1">言語</label>
+                    <select value={whisperLang} onChange={(e) => setWhisperLang(e.target.value)} className="w-full px-2 py-1.5 bg-gray-900 border border-gray-700 rounded text-xs text-white">
+                      <option value="ja">日本語</option>
+                      <option value="en">英語</option>
+                      <option value="zh">中国語</option>
+                      <option value="ko">韓国語</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-500 block mb-1">医療用語ヒント（任意）</label>
+                    <input type="text" value={whisperPrompt} onChange={(e) => setWhisperPrompt(e.target.value)}
+                      placeholder="例: 脊柱管狭窄症、坐骨神経痛、頸椎ヘルニア"
+                      className="w-full px-2 py-1.5 bg-gray-900 border border-gray-700 rounded text-xs text-white placeholder-gray-600" />
+                    <p className="text-[9px] text-gray-600 mt-0.5">専門用語を入力すると認識精度が向上します</p>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-500 block mb-1">精度 (temperature: {whisperTemperature})</label>
+                    <input type="range" min={0} max={1} step={0.1} value={whisperTemperature} onChange={(e) => setWhisperTemperature(parseFloat(e.target.value))} className="w-full" />
+                    <p className="text-[9px] text-gray-600">0=最も正確 / 1=多様な候補を探索</p>
+                  </div>
                 </div>
                 <button
                   onClick={handleWhisperSubtitles}
