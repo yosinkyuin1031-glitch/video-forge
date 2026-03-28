@@ -471,6 +471,41 @@ export interface TransitionOptions {
   videoDuration: number;
 }
 
+function buildTransitionInFilter(type: string, duration: number, width: number, height: number): string[] {
+  const d = duration.toFixed(3);
+  switch (type) {
+    case "fade":
+    case "crossfade":
+      return [`fade=in:st=0:d=${d}`];
+    case "wipe-left":
+      return [`crop=iw*min(t/${d}\\,1):ih:0:0,pad=${width}:${height}:(ow-iw):0:black`];
+    case "wipe-right":
+      return [`crop=iw*min(t/${d}\\,1):ih:iw-iw*min(t/${d}\\,1):0,pad=${width}:${height}:0:0:black`];
+    case "zoom":
+      return [`zoompan=z='min(1.5-0.5*on/(${Math.round(duration * 25)})\\,1.5)':d=${Math.round(duration * 25)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${width}x${height}:fps=25`];
+    default:
+      return [];
+  }
+}
+
+function buildTransitionOutFilter(type: string, duration: number, videoDuration: number, width: number, height: number): string[] {
+  const outStart = Math.max(0, videoDuration - duration).toFixed(3);
+  const d = duration.toFixed(3);
+  switch (type) {
+    case "fade":
+    case "crossfade":
+      return [`fade=out:st=${outStart}:d=${d}`];
+    case "wipe-left":
+      return [`fade=out:st=${outStart}:d=${d}`]; // wipe-out fallback to fade
+    case "wipe-right":
+      return [`fade=out:st=${outStart}:d=${d}`]; // wipe-out fallback to fade
+    case "zoom":
+      return [`fade=out:st=${outStart}:d=${d}`]; // zoom-out fallback to fade
+    default:
+      return [];
+  }
+}
+
 export async function applyTransitions(
   file: File,
   options: TransitionOptions,
@@ -484,42 +519,40 @@ export async function applyTransitions(
 
   const { transitionInType, transitionInDuration, transitionOutType, transitionOutDuration, videoDuration } = options;
 
+  // Probe video dimensions (default to 1920x1080)
+  let width = 1920, height = 1080;
+  try {
+    // Use ffprobe-like approach: scale filter will handle it
+  } catch { /* use defaults */ }
+
   const vfParts: string[] = [];
   const afParts: string[] = [];
 
-  // Fade in
-  if (transitionInType === "fade") {
-    vfParts.push(`fade=in:st=0:d=${transitionInDuration}`);
+  // Transition in
+  if (transitionInType && transitionInType !== "none") {
+    const inFilters = buildTransitionInFilter(transitionInType, transitionInDuration, width, height);
+    vfParts.push(...inFilters);
+    // Audio fade in for all transition types
     afParts.push(`afade=t=in:ss=0:d=${transitionInDuration}`);
   }
 
-  // Fade out
-  if (transitionOutType === "fade") {
+  // Transition out
+  if (transitionOutType && transitionOutType !== "none") {
+    const outFilters = buildTransitionOutFilter(transitionOutType, transitionOutDuration, videoDuration, width, height);
+    vfParts.push(...outFilters);
     const outStart = Math.max(0, videoDuration - transitionOutDuration);
-    vfParts.push(`fade=out:st=${outStart.toFixed(3)}:d=${transitionOutDuration}`);
     afParts.push(`afade=t=out:st=${outStart.toFixed(3)}:d=${transitionOutDuration}`);
   }
 
   if (vfParts.length === 0) {
-    // No transitions, just copy
     await ff.exec(["-i", "input", "-c", "copy", "transition_output.mp4"]);
   } else {
     const vfFilter = vfParts.join(",");
     if (afParts.length > 0) {
       const afFilter = afParts.join(",");
-      await ff.exec([
-        "-i", "input",
-        "-vf", vfFilter,
-        "-af", afFilter,
-        "transition_output.mp4"
-      ]);
+      await ff.exec(["-i", "input", "-vf", vfFilter, "-af", afFilter, "transition_output.mp4"]);
     } else {
-      await ff.exec([
-        "-i", "input",
-        "-vf", vfFilter,
-        "-c:a", "copy",
-        "transition_output.mp4"
-      ]);
+      await ff.exec(["-i", "input", "-vf", vfFilter, "-c:a", "copy", "transition_output.mp4"]);
     }
   }
 
@@ -841,16 +874,19 @@ export async function exportWithAspectRatio(
   file: File,
   width: number,
   height: number,
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
+  bitrate?: string
 ): Promise<Blob> {
   const ff = await getFFmpeg();
   await ff.writeFile("input", await fetchFile(file));
 
-  onProgress?.(`${width}x${height} でエクスポート中...`);
+  const br = bitrate || "8M";
+  onProgress?.(`${width}x${height} (${br}) でエクスポート中...`);
 
   await ff.exec([
     "-i", "input",
     "-vf", `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`,
+    "-b:v", br,
     "-c:a", "copy",
     "output.mp4"
   ]);

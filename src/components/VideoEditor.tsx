@@ -2855,8 +2855,17 @@ ${buildClinicContext(clinicProfile)}`
     pushHistory({ textOverlays: newOverlays, subtitles, silentSegments, videoUrl, stickers, filterSettings, transitionIn, transitionOut });
   };
 
+  const textHistoryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const updateTextOverlay = (id: string, updates: Partial<TextOverlay>) => {
-    setTextOverlays((prev) => prev.map((t) => t.id === id ? { ...t, ...updates } : t));
+    setTextOverlays((prev) => {
+      const next = prev.map((t) => t.id === id ? { ...t, ...updates } : t);
+      // Debounced history push (300ms) so rapid edits don't flood undo stack
+      if (textHistoryTimerRef.current) clearTimeout(textHistoryTimerRef.current);
+      textHistoryTimerRef.current = setTimeout(() => {
+        pushHistory({ textOverlays: next, subtitles, silentSegments, videoUrl, stickers, filterSettings, transitionIn, transitionOut });
+      }, 300);
+      return next;
+    });
   };
 
   const deleteTextOverlay = (id: string) => {
@@ -3051,7 +3060,7 @@ ${buildClinicContext(clinicProfile)}`
     setProcessing(true);
     try {
       if (!await ensureFFmpeg()) return;
-      const blob = await exportWithAspectRatio(videoFile, preset.width, preset.height, setProgressMsg);
+      const blob = await exportWithAspectRatio(videoFile, preset.width, preset.height, setProgressMsg, EXPORT_QUALITY_MAP[exportQuality].bitrate);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = `videoforge_${preset.platform}_${Date.now()}.mp4`; a.click();
       URL.revokeObjectURL(url);
