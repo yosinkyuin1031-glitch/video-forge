@@ -1128,7 +1128,7 @@ export default function VideoEditor() {
     if (!videoFile || playbackSpeed === 1 || processing) return;
     setProcessing(true);
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
       const blob = await changeSpeed(videoFile, playbackSpeed, setProgressMsg);
       const newFile = new File([blob], "speed.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -1173,7 +1173,7 @@ export default function VideoEditor() {
     if (!videoFile || clipMarkers.length === 0 || processing) return;
     setProcessing(true);
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
       const blob = await splitAndReorder(videoFile, clipMarkers, setProgressMsg);
       const newFile = new File([blob], "split.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -1199,7 +1199,7 @@ export default function VideoEditor() {
     if (!videoFile || processing) return;
     setProcessing(true);
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
       const blob = await applyFilters(videoFile, filterSettings, setProgressMsg);
       const newFile = new File([blob], "filtered.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -1228,7 +1228,7 @@ export default function VideoEditor() {
     if (!videoFile || processing) return;
     setProcessing(true);
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
       const blob = await applyTransitions(videoFile, { transitionInType: transitionIn.type, transitionInDuration: transitionIn.duration, transitionOutType: transitionOut.type, transitionOutDuration: transitionOut.duration, videoDuration: duration }, setProgressMsg);
       const newFile = new File([blob], "transition.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -1325,7 +1325,7 @@ export default function VideoEditor() {
     if (processing) return;
     setProcessing(true);
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
       const blob = await createCollage({ files: readyFiles, layout, borderWidth, borderColor, outputDuration }, setProgressMsg);
       const newFile = new File([blob], "collage.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -1361,7 +1361,7 @@ export default function VideoEditor() {
     if (processing) return;
     setProcessing(true);
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
       const blob = await createSlideshow({ images: slideshowSettings.images.map((img) => ({ file: img.file, duration: img.duration })), transition: slideshowSettings.transition, transitionDuration: slideshowSettings.transitionDuration }, setProgressMsg);
       const newFile = new File([blob], "slideshow.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -1381,7 +1381,7 @@ export default function VideoEditor() {
     if (processing) return;
     setProcessing(true);
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
       const pipEnd = pipSettings.endTime > pipSettings.startTime ? pipSettings.endTime : duration;
       const blob = await applyPip({ mainFile: videoFile, pipFile: pipSettings.file, position: pipSettings.position, size: pipSettings.size, borderWidth: pipSettings.borderWidth, borderColor: pipSettings.borderColor, startTime: pipSettings.startTime, endTime: pipEnd }, setProgressMsg);
       const newFile = new File([blob], "pip.mp4", { type: "video/mp4" });
@@ -1402,12 +1402,13 @@ export default function VideoEditor() {
     if (!videoFile || processing) return;
     setProcessing(true);
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
       const blob = await exportGif({ file: videoFile, startTime: gifStart, endTime: Math.min(gifEnd, duration), fps: gifFps, width: gifWidth }, setProgressMsg);
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = `videoforge_${Date.now()}.gif`; a.click();
-      URL.revokeObjectURL(url);
-      setProgressMsg("GIF書き出し完了!");
+      try {
+        const a = document.createElement("a"); a.href = url; a.download = `videoforge_${Date.now()}.gif`; a.click();
+        setProgressMsg("GIF書き出し完了!");
+      } finally { URL.revokeObjectURL(url); }
     } catch { setProgressMsg("GIF書き出しに失敗しました"); } finally { setProcessing(false); }
   };
 
@@ -1427,7 +1428,7 @@ export default function VideoEditor() {
     if (!videoFile || mosaicAreas.length === 0 || processing) return;
     setProcessing(true);
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
       const vw = videoRef.current?.videoWidth || 1280;
       const vh = videoRef.current?.videoHeight || 720;
       const blob = await applyMosaicAreas(videoFile, mosaicAreas, vw, vh, setProgressMsg);
@@ -1455,7 +1456,7 @@ export default function VideoEditor() {
     if (processing) return;
     setProcessing(true);
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
       const isImage = chromaKey.bgFile.type.startsWith("image/");
       const blob = await applyChromaKey({ videoFile, bgFile: chromaKey.bgFile, bgIsImage: isImage, keyColor: chromaKey.keyColor, similarity: chromaKey.similarity, blend: chromaKey.blend }, setProgressMsg);
       const newFile = new File([blob], "chromakey.mp4", { type: "video/mp4" });
@@ -1488,7 +1489,7 @@ export default function VideoEditor() {
     if (processing) return;
     setProcessing(true);
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
       const blob = await applyLogo({ videoFile, logoFile: logoSettings.file, position: logoSettings.position, size: logoSettings.size, opacity: logoSettings.opacity, margin: logoSettings.margin }, setProgressMsg);
       const newFile = new File([blob], "logo.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -1634,9 +1635,16 @@ export default function VideoEditor() {
     try {
       const detector = new (window as any).FaceDetector({ fastMode: true });
       const video = videoRef.current;
+      const vw = video.videoWidth || 1;
+      const vh = video.videoHeight || 1;
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        setProgressMsg("動画の読み込みが完了していません。少し待ってから再試行してください。");
+        setProcessing(false);
+        return;
+      }
       const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = video.videoWidth;
-      tempCanvas.height = video.videoHeight;
+      tempCanvas.width = vw;
+      tempCanvas.height = vh;
       const tempCtx = tempCanvas.getContext('2d')!;
       tempCtx.drawImage(video, 0, 0);
       const faces = await detector.detect(tempCanvas);
@@ -1645,10 +1653,10 @@ export default function VideoEditor() {
       } else {
         const newAreas = faces.map((face: any, i: number) => ({
           id: `face-${Date.now()}-${i}`,
-          x: (face.boundingBox.x / video.videoWidth) * 100,
-          y: (face.boundingBox.y / video.videoHeight) * 100,
-          width: (face.boundingBox.width / video.videoWidth) * 100,
-          height: (face.boundingBox.height / video.videoHeight) * 100,
+          x: (face.boundingBox.x / vw) * 100,
+          y: (face.boundingBox.y / vh) * 100,
+          width: (face.boundingBox.width / vw) * 100,
+          height: (face.boundingBox.height / vh) * 100,
           type: "mosaic" as const,
           intensity: 15,
           startTime: 0,
@@ -1671,6 +1679,13 @@ export default function VideoEditor() {
     }
     setProcessing(true);
     const video = videoRef.current;
+    const vw = video.videoWidth || 1;
+    const vh = video.videoHeight || 1;
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      setProgressMsg("動画の読み込みが完了していません。少し待ってから再試行してください。");
+      setProcessing(false);
+      return;
+    }
     const savedTime = video.currentTime;
     const detector = new (window as any).FaceDetector({ fastMode: true });
     const allAreas: MosaicArea[] = [];
@@ -1683,8 +1698,8 @@ export default function VideoEditor() {
         video.currentTime = t;
         await new Promise<void>((resolve) => video.addEventListener('seeked', () => resolve(), { once: true }));
         const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = video.videoWidth;
-        tempCanvas.height = video.videoHeight;
+        tempCanvas.width = vw;
+        tempCanvas.height = vh;
         const tempCtx = tempCanvas.getContext('2d')!;
         tempCtx.drawImage(video, 0, 0);
         const faces = await detector.detect(tempCanvas);
@@ -1692,10 +1707,10 @@ export default function VideoEditor() {
           const face = faces[i];
           allAreas.push({
             id: `face-scan-${Date.now()}-${idx}-${i}`,
-            x: (face.boundingBox.x / video.videoWidth) * 100,
-            y: (face.boundingBox.y / video.videoHeight) * 100,
-            width: (face.boundingBox.width / video.videoWidth) * 100,
-            height: (face.boundingBox.height / video.videoHeight) * 100,
+            x: (face.boundingBox.x / vw) * 100,
+            y: (face.boundingBox.y / vh) * 100,
+            width: (face.boundingBox.width / vw) * 100,
+            height: (face.boundingBox.height / vh) * 100,
             type: "mosaic" as const,
             intensity: 15,
             startTime: Math.max(0, t - 1),
@@ -2416,8 +2431,8 @@ ${buildClinicContext(clinicProfile)}`
   const bgmInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
 
-  const ensureFFmpeg = useCallback(async () => {
-    if (ffmpegLoaded) return;
+  const ensureFFmpeg = useCallback(async (): Promise<boolean> => {
+    if (ffmpegLoaded) return true;
     setFfmpegLoading(true);
     const sabStatus = typeof SharedArrayBuffer !== "undefined" ? "有効" : "無効";
     const coiStatus = typeof window !== "undefined" && window.crossOriginIsolated ? "有効" : "無効";
@@ -2425,11 +2440,11 @@ ${buildClinicContext(clinicProfile)}`
     try {
       const { getFFmpeg } = await import("@/lib/ffmpeg-utils");
       await getFFmpeg(); setFfmpegLoaded(true);
+      return true;
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
       setProgressMsg(`FFmpeg読込失敗 (SAB:${sabStatus}, COI:${coiStatus}): ${errMsg}`);
-      setFfmpegLoading(false);
-      throw e;
+      return false;
     } finally { setFfmpegLoading(false); }
   }, [ffmpegLoaded]);
 
@@ -2518,7 +2533,7 @@ ${buildClinicContext(clinicProfile)}`
     if (!videoFile || processing) return;
     setProcessing(true);
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
       const segments = await detectSilence(videoFile, silenceThreshold, silenceMinDuration, setProgressMsg);
       setSilentSegments(segments);
       setProgressMsg(`${segments.length}箇所の無音区間を検出しました`);
@@ -2529,7 +2544,7 @@ ${buildClinicContext(clinicProfile)}`
     if (!videoFile || silentSegments.length === 0 || processing) return;
     setProcessing(true);
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
       const blob = await removeSilence(videoFile, silentSegments, 0.1, setProgressMsg);
       const newFile = new File([blob], "edited.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -2544,7 +2559,7 @@ ${buildClinicContext(clinicProfile)}`
     if (!videoFile || processing) return;
     setProcessing(true);
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
       const blob = await trimVideo(videoFile, trimStart, trimEnd, setProgressMsg);
       const newFile = new File([blob], "trimmed.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -2686,7 +2701,7 @@ ${buildClinicContext(clinicProfile)}`
     if (!videoFile || !bgmFile || processing) return;
     setProcessing(true);
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
       const blob = await addBgm(videoFile, bgmFile, bgmVolume, setProgressMsg);
       const newFile = new File([blob], "with-bgm.mp4", { type: "video/mp4" });
       const newUrl = URL.createObjectURL(blob);
@@ -2752,7 +2767,7 @@ ${buildClinicContext(clinicProfile)}`
     const preset = ASPECT_PRESETS[selectedPresetIdx];
     setProcessing(true);
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
       const blob = await exportWithAspectRatio(videoFile, preset.width, preset.height, setProgressMsg);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = `videoforge_${preset.platform}_${Date.now()}.mp4`; a.click();
@@ -3192,7 +3207,7 @@ ${buildClinicContext(clinicProfile)}`
     const logStep = (msg: string) => setAutoStepLog((prev) => [...prev, msg]);
 
     try {
-      await ensureFFmpeg();
+      if (!await ensureFFmpeg()) return;
 
       // Step 1: Silence Cut
       if (autoSettings.silenceCut) {
