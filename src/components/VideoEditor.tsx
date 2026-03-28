@@ -2433,9 +2433,7 @@ ${buildClinicContext(clinicProfile)}`
     } finally { setFfmpegLoading(false); }
   }, [ffmpegLoaded]);
 
-  const handleVideoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const loadVideoFile = useCallback((file: File) => {
     // Revoke old blob URL to prevent memory leak
     setVideoUrl((prevUrl) => {
       if (prevUrl && prevUrl.startsWith("blob:")) {
@@ -2453,6 +2451,24 @@ ${buildClinicContext(clinicProfile)}`
     setHistoryIndex(0);
     historyIndexRef.current = 0;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleVideoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    loadVideoFile(file);
+  }, [loadVideoFile]);
+
+  const [isDragging, setIsDragging] = useState(false);
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("video/")) {
+      loadVideoFile(file);
+    }
+  }, [loadVideoFile]);
+  const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); }, []);
+  const handleDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); }, []);
 
   // Auto-subtitle: trigger Whisper when video loads and auto mode is on
   const autoSubtitleTriggered = useRef(false);
@@ -3449,7 +3465,8 @@ ${buildClinicContext(clinicProfile)}`
 
   if (!videoUrl) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen flex flex-col items-center justify-center p-4"
+        onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}>
         <div className="max-w-md w-full text-center">
           <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">VideoForge</h1>
           <p className="text-gray-400 text-sm mb-4">AI動画エディタ</p>
@@ -3461,10 +3478,11 @@ ${buildClinicContext(clinicProfile)}`
           ) : (
             <p className="text-[11px] text-gray-500 mb-6">院のプロフィールを設定するとAI生成が院に特化した内容になります</p>
           )}
-          <button onClick={() => fileInputRef.current?.click()} className="w-full p-8 border-2 border-dashed border-gray-600 rounded-2xl hover:border-indigo-500 hover:bg-indigo-500/5 transition-all group">
-            <div className="text-5xl mb-4 group-hover:scale-110 transition-transform">🎥</div>
-            <p className="text-lg font-medium text-gray-300 mb-1">動画をアップロード</p>
-            <p className="text-sm text-gray-500">MP4, MOV, WebM対応</p>
+          <button onClick={() => fileInputRef.current?.click()}
+            className={`w-full p-8 border-2 border-dashed rounded-2xl transition-all group ${isDragging ? "border-indigo-400 bg-indigo-500/10 scale-105" : "border-gray-600 hover:border-indigo-500 hover:bg-indigo-500/5"}`}>
+            <div className="text-5xl mb-4 group-hover:scale-110 transition-transform">{isDragging ? "📂" : "🎥"}</div>
+            <p className="text-lg font-medium text-gray-300 mb-1">{isDragging ? "ここにドロップ" : "動画をアップロード"}</p>
+            <p className="text-sm text-gray-500">{isDragging ? "動画ファイルを離してください" : "クリック or ドラッグ&ドロップ（MP4, MOV, WebM）"}</p>
           </button>
           <input ref={fileInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
           <div className="mt-8 grid grid-cols-3 gap-3">
