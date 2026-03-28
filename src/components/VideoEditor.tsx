@@ -2650,16 +2650,17 @@ ${buildClinicContext(clinicProfile)}`
 
   // Auto-subtitle: trigger Whisper when video loads and auto mode is on
   const autoSubtitleTriggered = useRef(false);
+  // Auto-subtitle trigger: ref guard (autoSubtitleTriggered) ensures this runs at most once per video load.
+  // handleWhisperSubtitles is intentionally omitted from deps (not memoized) — ref guard prevents re-execution.
   useEffect(() => {
     if (autoSubtitleEnabled && videoFile && whisperApiKey && !processing && !autoSubtitleTriggered.current && subtitles.length === 0) {
       autoSubtitleTriggered.current = true;
-      // Small delay to let video load
       const timer = setTimeout(() => {
         handleWhisperSubtitles();
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [videoFile, autoSubtitleEnabled, whisperApiKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [videoFile, autoSubtitleEnabled, whisperApiKey, processing, subtitles.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset auto-subtitle trigger when new video is uploaded
   useEffect(() => {
