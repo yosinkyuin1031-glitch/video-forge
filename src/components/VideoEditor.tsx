@@ -1001,6 +1001,13 @@ export default function VideoEditor() {
   const [thumbnailGenerating, setThumbnailGenerating] = useState(false);
   const [thumbnailSubText, setThumbnailSubText] = useState("");
   const [thumbnailColorScheme, setThumbnailColorScheme] = useState({ label: "赤×白", main: "#ff0000", sub: "#ffffff", bg: "rgba(0,0,0,0.7)" });
+  const [thumbnailBeforeImg, setThumbnailBeforeImg] = useState<string | null>(null);
+  const [thumbnailAfterImg, setThumbnailAfterImg] = useState<string | null>(null);
+  const [thumbnailOverlayImg, setThumbnailOverlayImg] = useState<string | null>(null);
+  const [thumbnailMarks, setThumbnailMarks] = useState<string[]>([]);
+  const thumbnailBeforeRef = useRef<HTMLInputElement>(null);
+  const thumbnailAfterRef = useRef<HTMLInputElement>(null);
+  const thumbnailOverlayRef = useRef<HTMLInputElement>(null);
 
   // ===== SNS CAPTION =====
   const [captionPlatform, setCaptionPlatform] = useState<"Instagram" | "YouTube" | "TikTok">("YouTube");
@@ -1701,27 +1708,127 @@ export default function VideoEditor() {
     setThumbnailGenerating(false);
   };
 
-  const handleGenerateThumbnail = () => {
-    if (!videoRef.current) return;
+  const handleGenerateThumbnail = async () => {
     const thumbCanvas = document.createElement('canvas');
     thumbCanvas.width = 1280;
     thumbCanvas.height = 720;
     const ctx = thumbCanvas.getContext('2d')!;
-    // Use selected frame or current video frame
-    if (thumbnailFrames.length > selectedThumbnailFrame) {
+
+    const loadImg = (src: string): Promise<HTMLImageElement> => new Promise((resolve, reject) => {
       const img = new Image();
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, 1280, 720);
-        applyThumbnailText(ctx, thumbCanvas);
-      };
-      img.src = thumbnailFrames[selectedThumbnailFrame];
-    } else {
-      ctx.drawImage(videoRef.current, 0, 0, 1280, 720);
-      applyThumbnailText(ctx, thumbCanvas);
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+
+    // ビフォーアフターテンプレ(2)で画像がある場合 → 画像合成
+    if (thumbnailTemplate === 2 && thumbnailBeforeImg && thumbnailAfterImg) {
+      try {
+        const [before, after] = await Promise.all([loadImg(thumbnailBeforeImg), loadImg(thumbnailAfterImg)]);
+        ctx.drawImage(before, 0, 0, 635, 720);
+        ctx.drawImage(after, 645, 0, 635, 720);
+      } catch { ctx.fillStyle = "#1a1a2e"; ctx.fillRect(0, 0, 1280, 720); }
+      applyThumbnailOverlays(ctx, thumbCanvas);
+      return;
     }
+
+    // オーバーレイ画像がある場合 → 背景として使用
+    if (thumbnailOverlayImg) {
+      try {
+        const overlayImg = await loadImg(thumbnailOverlayImg);
+        ctx.drawImage(overlayImg, 0, 0, 1280, 720);
+      } catch { ctx.fillStyle = "#1a1a2e"; ctx.fillRect(0, 0, 1280, 720); }
+      applyThumbnailOverlays(ctx, thumbCanvas);
+      return;
+    }
+
+    // 動画フレームから
+    if (thumbnailFrames.length > selectedThumbnailFrame) {
+      try {
+        const img = await loadImg(thumbnailFrames[selectedThumbnailFrame]);
+        ctx.drawImage(img, 0, 0, 1280, 720);
+      } catch { ctx.fillStyle = "#1a1a2e"; ctx.fillRect(0, 0, 1280, 720); }
+    } else if (videoRef.current) {
+      ctx.drawImage(videoRef.current, 0, 0, 1280, 720);
+    } else {
+      ctx.fillStyle = "#1a1a2e"; ctx.fillRect(0, 0, 1280, 720);
+    }
+    applyThumbnailOverlays(ctx, thumbCanvas);
   };
 
-  const applyThumbnailText = (ctx: CanvasRenderingContext2D, thumbCanvas: HTMLCanvasElement) => {
+  const applyThumbnailOverlays = (ctx: CanvasRenderingContext2D, thumbCanvas: HTMLCanvasElement) => {
+    // テキスト描画
+    applyThumbnailText(ctx, thumbCanvas, false);
+    // マーク描画
+    drawThumbnailMarks(ctx);
+    // ダウンロード
+    const link = document.createElement('a');
+    link.download = `thumbnail_${Date.now()}.png`;
+    link.href = thumbCanvas.toDataURL('image/png');
+    link.click();
+  };
+
+  const drawThumbnailMarks = (ctx: CanvasRenderingContext2D) => {
+    thumbnailMarks.forEach((mark) => {
+      ctx.save();
+      if (mark === "arrow-right") {
+        ctx.strokeStyle = "#ff0000";
+        ctx.lineWidth = 12;
+        ctx.beginPath();
+        ctx.moveTo(350, 360);
+        ctx.lineTo(550, 360);
+        ctx.lineTo(510, 310);
+        ctx.moveTo(550, 360);
+        ctx.lineTo(510, 410);
+        ctx.stroke();
+      } else if (mark === "arrow-down") {
+        ctx.strokeStyle = "#ff0000";
+        ctx.lineWidth = 12;
+        ctx.beginPath();
+        ctx.moveTo(640, 200);
+        ctx.lineTo(640, 400);
+        ctx.lineTo(590, 360);
+        ctx.moveTo(640, 400);
+        ctx.lineTo(690, 360);
+        ctx.stroke();
+      } else if (mark === "circle") {
+        ctx.strokeStyle = "#ff0000";
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        ctx.arc(640, 360, 120, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (mark === "cross") {
+        ctx.strokeStyle = "#ff0000";
+        ctx.lineWidth = 16;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(480, 200);
+        ctx.lineTo(800, 520);
+        ctx.moveTo(800, 200);
+        ctx.lineTo(480, 520);
+        ctx.stroke();
+      } else if (mark === "check") {
+        ctx.strokeStyle = "#00cc00";
+        ctx.lineWidth = 14;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.beginPath();
+        ctx.moveTo(520, 380);
+        ctx.lineTo(620, 480);
+        ctx.lineTo(780, 260);
+        ctx.stroke();
+      } else if (mark === "star") {
+        ctx.fillStyle = "#ffd700";
+        ctx.font = "120px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("★", 640, 200);
+      }
+      ctx.restore();
+    });
+  };
+
+  const applyThumbnailText = (ctx: CanvasRenderingContext2D, thumbCanvas: HTMLCanvasElement, doDownload: boolean = true) => {
     const mainColor = thumbnailColorScheme.main;
     const subColor = thumbnailColorScheme.sub;
     const bgColor = thumbnailColorScheme.bg;
@@ -2000,10 +2107,12 @@ export default function VideoEditor() {
       ctx.restore();
     }
 
-    const link = document.createElement('a');
-    link.download = `thumbnail_${Date.now()}.png`;
-    link.href = thumbCanvas.toDataURL('image/png');
-    link.click();
+    if (doDownload) {
+      const link = document.createElement('a');
+      link.download = `thumbnail_${Date.now()}.png`;
+      link.href = thumbCanvas.toDataURL('image/png');
+      link.click();
+    }
   };
 
   // ===== SNS CAPTION GENERATION =====
@@ -5226,10 +5335,78 @@ ${buildClinicContext(clinicProfile)}`
                     ))}
                   </div>
                 </div>
+                {/* 画像アップロード */}
+                <div className="space-y-2">
+                  <label className="text-xs text-gray-400 block">画像を使う（任意）</label>
+                  <div className="grid grid-cols-1 gap-1.5">
+                    <div>
+                      <input ref={thumbnailOverlayRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) { if (thumbnailOverlayImg) URL.revokeObjectURL(thumbnailOverlayImg); setThumbnailOverlayImg(URL.createObjectURL(f)); }
+                      }} />
+                      <button onClick={() => thumbnailOverlayRef.current?.click()} className="w-full py-2 bg-gray-800 border border-gray-700 rounded-lg text-[11px] text-gray-300 hover:bg-gray-700 transition-colors">
+                        {thumbnailOverlayImg ? "✅ 背景画像を変更" : "🖼 背景画像をアップロード"}
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div>
+                        <input ref={thumbnailBeforeRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) { if (thumbnailBeforeImg) URL.revokeObjectURL(thumbnailBeforeImg); setThumbnailBeforeImg(URL.createObjectURL(f)); }
+                        }} />
+                        <button onClick={() => thumbnailBeforeRef.current?.click()} className="w-full py-2 bg-gray-800 border border-gray-700 rounded-lg text-[10px] text-gray-300 hover:bg-gray-700">
+                          {thumbnailBeforeImg ? "✅ Before" : "📷 Before画像"}
+                        </button>
+                      </div>
+                      <div>
+                        <input ref={thumbnailAfterRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) { if (thumbnailAfterImg) URL.revokeObjectURL(thumbnailAfterImg); setThumbnailAfterImg(URL.createObjectURL(f)); }
+                        }} />
+                        <button onClick={() => thumbnailAfterRef.current?.click()} className="w-full py-2 bg-gray-800 border border-gray-700 rounded-lg text-[10px] text-gray-300 hover:bg-gray-700">
+                          {thumbnailAfterImg ? "✅ After" : "📷 After画像"}
+                        </button>
+                      </div>
+                    </div>
+                    {(thumbnailOverlayImg || thumbnailBeforeImg || thumbnailAfterImg) && (
+                      <button onClick={() => {
+                        if (thumbnailOverlayImg) URL.revokeObjectURL(thumbnailOverlayImg);
+                        if (thumbnailBeforeImg) URL.revokeObjectURL(thumbnailBeforeImg);
+                        if (thumbnailAfterImg) URL.revokeObjectURL(thumbnailAfterImg);
+                        setThumbnailOverlayImg(null); setThumbnailBeforeImg(null); setThumbnailAfterImg(null);
+                      }} className="text-[10px] text-red-400 hover:text-red-300">画像をリセット</button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 装飾マーク */}
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">装飾マーク（複数選択可）</label>
+                  <div className="grid grid-cols-3 gap-1">
+                    {[
+                      { id: "arrow-right", label: "→ 矢印（右）" },
+                      { id: "arrow-down", label: "↓ 矢印（下）" },
+                      { id: "circle", label: "⭕ 丸マーク" },
+                      { id: "cross", label: "✕ バツマーク" },
+                      { id: "check", label: "✓ チェック" },
+                      { id: "star", label: "★ 星マーク" },
+                    ].map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => setThumbnailMarks((prev) => prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id])}
+                        className={`py-1.5 rounded-lg text-[10px] font-medium transition-all border ${
+                          thumbnailMarks.includes(m.id) ? "border-indigo-500 bg-indigo-600/20 text-indigo-300" : "border-gray-700 bg-gray-800 text-gray-400 hover:bg-gray-700"
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <button
                   onClick={handleGenerateThumbnail}
-                  disabled={!duration}
-                  className="w-full py-2.5 bg-orange-700 text-white rounded-xl text-sm font-bold hover:bg-orange-600 disabled:opacity-50 transition-colors"
+                  className="w-full py-2.5 bg-orange-700 text-white rounded-xl text-sm font-bold hover:bg-orange-600 transition-colors"
                 >
                   サムネイルをダウンロード (1280×720)
                 </button>
