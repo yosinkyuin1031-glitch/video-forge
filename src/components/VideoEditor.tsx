@@ -3902,26 +3902,38 @@ ${buildClinicContext(clinicProfile)}`
                     selectedSymptom === "その他" || t.symptom === selectedSymptom
                   );
                   if (filtered.length === 0) return <p className="text-sm text-gray-500 text-center py-8">この症状のテンプレートは準備中です。「自由に編集」をお使いください。</p>;
-                  return filtered.map((t) => (
+                  return filtered.map((t) => {
+                    const totalDur = t.scriptStructure.reduce((sum, s) => sum + s.duration, 0);
+                    const mainAction = t.scriptStructure.find((s) => s.type === "demonstration" || s.type === "solution");
+                    return (
                     <button key={t.id} onClick={() => { setSelectedViralTemplate(t.id); setTopStep("upload"); }}
                       className={`w-full text-left p-4 rounded-xl border transition-all ${selectedViralTemplate === t.id ? "border-indigo-500 bg-indigo-900/30" : "border-gray-700 bg-gray-800 hover:border-indigo-500/50 hover:bg-gray-750"}`}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
                           <p className="text-sm font-bold text-white mb-1">{t.name}</p>
-                          <p className="text-xs text-gray-400 mb-2">{t.description}</p>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] px-2 py-0.5 bg-gray-700 rounded-full text-gray-300">{t.platform}</span>
+                          <p className="text-xs text-gray-400 mb-1">{t.description}</p>
+                          <div className="flex items-center gap-2 flex-wrap mb-2">
+                            <span className="text-[10px] px-2 py-0.5 bg-gray-700 rounded-full text-gray-300">{t.platform === "reels" || t.platform === "tiktok" || t.platform === "shorts" ? "📱 縦型" : "🖥 横型"}</span>
                             <span className="text-[10px] px-2 py-0.5 bg-gray-700 rounded-full text-gray-300">{t.format}</span>
+                            <span className="text-[10px] px-2 py-0.5 bg-blue-900/50 rounded-full text-blue-300">約{totalDur}秒</span>
                             <span className="text-[10px] text-yellow-400">{"★".repeat(t.buzzScore)}{"☆".repeat(5 - t.buzzScore)}</span>
+                          </div>
+                          {/* 撮影内容の簡易説明 */}
+                          <div className="bg-yellow-900/20 border border-yellow-800/30 rounded-lg px-2.5 py-1.5 mb-2">
+                            <p className="text-[10px] text-yellow-400 font-medium">📹 撮る内容:</p>
+                            <p className="text-[10px] text-yellow-300/80">
+                              {mainAction ? mainAction.note || mainAction.text.slice(0, 40) : t.scriptStructure.map((s) => s.type === "hook" ? "掴み" : s.type === "problem" ? "問題提起" : s.type === "solution" ? "解決策" : s.type === "demonstration" ? "実演" : s.type === "cta" ? "CTA" : "つなぎ").join(" → ")}
+                            </p>
                           </div>
                         </div>
                       </div>
-                      <div className="mt-2 bg-gray-900/50 rounded-lg px-3 py-2">
-                        <p className="text-[10px] text-gray-500 mb-0.5">冒頭の掴み:</p>
-                        <p className="text-xs text-indigo-300 font-medium">{t.hookLine}</p>
+                      <div className="bg-gray-900/50 rounded-lg px-3 py-2">
+                        <p className="text-[10px] text-gray-500 mb-0.5">冒頭の掴み（最初に言うセリフ）:</p>
+                        <p className="text-xs text-indigo-300 font-medium">&ldquo;{t.hookLine}&rdquo;</p>
                       </div>
                     </button>
-                  ));
+                    );
+                  });
                 })()}
               </div>
               <button onClick={() => { setTopStep("upload"); setSelectedViralTemplate(null); }}
@@ -3939,8 +3951,62 @@ ${buildClinicContext(clinicProfile)}`
               <button onClick={() => setTopStep("template")} className="text-xs text-gray-500 hover:text-gray-300 mb-4 block text-left">← テンプレートを選び直す</button>
               <p className="text-xs text-indigo-400 font-bold mb-1">STEP 3 / 3</p>
               <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">動画をアップロード</h2>
-              {selectedViralTemplate && (
-                <p className="text-xs text-gray-400 mb-4">テンプレートが自動適用されます</p>
+              {selectedViralTemplate && (() => {
+                const tmpl = VIRAL_TEMPLATES.find((t) => t.id === selectedViralTemplate);
+                if (!tmpl) return <p className="text-xs text-gray-400 mb-4">テンプレートが自動適用されます</p>;
+                return (
+                  <div className="text-left mb-6 space-y-3">
+                    <div className="bg-indigo-900/30 border border-indigo-700/50 rounded-xl p-4">
+                      <p className="text-sm font-bold text-indigo-300 mb-1">{tmpl.name}</p>
+                      <p className="text-xs text-gray-400">{tmpl.description}</p>
+                      <div className="flex gap-2 mt-2">
+                        <span className="text-[10px] px-2 py-0.5 bg-indigo-800/50 rounded-full text-indigo-300">{tmpl.aspectRatio === "9:16" ? "縦型" : "横型"}</span>
+                        <span className="text-[10px] px-2 py-0.5 bg-indigo-800/50 rounded-full text-indigo-300">{tmpl.recommendedDuration.min}〜{tmpl.recommendedDuration.max}秒</span>
+                      </div>
+                    </div>
+                    {/* 撮影ガイド */}
+                    <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+                      <p className="text-xs font-bold text-yellow-400 mb-2">📹 こんな動画を撮ってください</p>
+                      <div className="space-y-2">
+                        {tmpl.scriptStructure.map((seg, i) => (
+                          <div key={i} className="flex gap-2">
+                            <div className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center">
+                              <span className="text-[9px] text-gray-300 font-bold">{i + 1}</span>
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
+                                  seg.type === "hook" ? "bg-red-900/50 text-red-300" :
+                                  seg.type === "problem" ? "bg-orange-900/50 text-orange-300" :
+                                  seg.type === "solution" ? "bg-blue-900/50 text-blue-300" :
+                                  seg.type === "demonstration" ? "bg-green-900/50 text-green-300" :
+                                  seg.type === "cta" ? "bg-purple-900/50 text-purple-300" :
+                                  "bg-gray-700 text-gray-300"
+                                }`}>
+                                  {seg.type === "hook" ? "掴み" : seg.type === "problem" ? "問題提起" : seg.type === "solution" ? "解決策" : seg.type === "demonstration" ? "実演" : seg.type === "cta" ? "誘導" : "つなぎ"}
+                                </span>
+                                <span className="text-[9px] text-gray-500">{seg.duration}秒</span>
+                              </div>
+                              <p className="text-[11px] text-gray-300 mt-0.5">{seg.text}</p>
+                              {seg.note && <p className="text-[10px] text-yellow-400/70 mt-0.5">💡 {seg.note}</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-gray-700">
+                        <p className="text-[10px] text-gray-500">合計: 約{tmpl.scriptStructure.reduce((sum, s) => sum + s.duration, 0)}秒 | この流れで撮影した動画をアップロードしてください</p>
+                      </div>
+                    </div>
+                    {/* サムネのコツ */}
+                    <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-3">
+                      <p className="text-[10px] font-bold text-orange-400 mb-1">🖼 サムネイルのコツ</p>
+                      <p className="text-[10px] text-gray-400">{tmpl.thumbnailTips}</p>
+                    </div>
+                  </div>
+                );
+              })()}
+              {!selectedViralTemplate && (
+                <p className="text-xs text-gray-400 mb-4">自由に動画を編集できます</p>
               )}
               <button onClick={() => fileInputRef.current?.click()}
                 className={`w-full p-8 border-2 border-dashed rounded-2xl transition-all group ${isDragging ? "border-indigo-400 bg-indigo-500/10 scale-105" : "border-gray-600 hover:border-indigo-500 hover:bg-indigo-500/5"}`}>
