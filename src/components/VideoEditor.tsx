@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { TextOverlay, SubtitleEntry, EditorTool, ASPECT_PRESETS, FONT_OPTIONS, ClipMarker, FilterSettings, TransitionSetting, TransitionType, StickerOverlay, CollageLayout, CollageItem, CollageSettings, SlideshowImage, SlideshowSettings, PipSettings, MosaicArea, ChromaKeySettings, TextAnimation, VideoTemplate, Keyframe, KeyframeProperties, LogoSettings, LogoPosition } from "@/lib/types";
+import { TextOverlay, SubtitleEntry, EditorTool, ASPECT_PRESETS, FONT_OPTIONS, ClipMarker, FilterSettings, TransitionSetting, TransitionType, StickerOverlay, CollageLayout, CollageItem, CollageSettings, SlideshowImage, SlideshowSettings, PipSettings, MosaicArea, ChromaKeySettings, TextAnimation, VideoTemplate, Keyframe, KeyframeProperties, LogoSettings, LogoPosition, ClinicProfile } from "@/lib/types";
 import { detectSilence, removeSilence, trimVideo, addBgm, exportWithAspectRatio, SilentSegment, changeSpeed, splitAndReorder, applyFilters, applyTransitions, createCollage, createSlideshow, applyPip, exportGif, applyMosaicAreas, applyChromaKey, extractAudio, applyLogo } from "@/lib/ffmpeg-utils";
+import ClinicProfileSetup from "./ClinicProfileSetup";
+import ViralTemplateGallery from "./ViralTemplateGallery";
 
 // ===== BGM LIBRARY =====
 type BgmItemKey =
@@ -921,7 +923,31 @@ interface HistoryState {
 // Default filter values - defined outside component to prevent reference instability
 const DEFAULT_FILTERS: FilterSettings = { brightness: 100, contrast: 100, saturation: 100, temperature: 0, vignette: 0 };
 
+// Helper: build clinic context string for AI prompts
+function buildClinicContext(p: ClinicProfile | null): string {
+  if (!p) return "治療院・整体院";
+  const parts: string[] = [];
+  if (p.clinicName) parts.push(`院名: ${p.clinicName}`);
+  if (p.area) parts.push(`地域: ${p.area}`);
+  if (p.specialties.length > 0) parts.push(`得意症状: ${p.specialties.join("、")}`);
+  if (p.treatmentStyle) parts.push(`治療スタイル: ${p.treatmentStyle}`);
+  if (p.target) parts.push(`ターゲット: ${p.target}`);
+  if (p.strengths) parts.push(`強み: ${p.strengths}`);
+  if (p.achievements) parts.push(`実績: ${p.achievements}`);
+  const toneMap = { professional: "専門的で信頼感のある", friendly: "親しみやすくカジュアルな", warm: "温かく寄り添うような", energetic: "明るく元気な" };
+  parts.push(`トーン: ${toneMap[p.tone]}口調`);
+  return parts.join("\n");
+}
+
 export default function VideoEditor() {
+  // Clinic profile
+  const [clinicProfile, setClinicProfile] = useState<ClinicProfile | null>(() => {
+    try {
+      const saved = localStorage.getItem("videoforge_clinic_profile");
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+
   // Video state
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
@@ -1518,7 +1544,7 @@ export default function VideoEditor() {
           model: "gpt-4o-mini",
           messages: [{
             role: "system",
-            content: `あなたは治療院・整体院のYouTube/SNS動画の台本ライターです。患者さんにわかりやすく、専門的すぎない言葉で健康情報を伝える台本を作成してください。${platformStyle}台本は必ずJSON配列形式で返してください。各要素は {"text": "セリフ", "duration": 秒数} です。合計が${durationMap[scriptDuration]}になるようにしてください。`
+            content: `あなたは治療院・整体院のYouTube/SNS動画の台本ライターです。患者さんにわかりやすく、専門的すぎない言葉で健康情報を伝える台本を作成してください。${platformStyle}台本は必ずJSON配列形式で返してください。各要素は {"text": "セリフ", "duration": 秒数} です。合計が${durationMap[scriptDuration]}になるようにしてください。\n\n【院の情報】\n${buildClinicContext(clinicProfile)}`
           }, {
             role: "user",
             content: `テーマ: ${scriptTopic}\n台本をJSON配列で生成してください。`
@@ -1781,7 +1807,10 @@ export default function VideoEditor() {
   "title": "動画タイトル（${captionPlatform === "YouTube" ? "60文字以内、SEOを意識" : "30文字以内、キャッチーに"}）",
   "caption": "投稿説明文（${captionPlatform === "YouTube" ? "300〜500文字、概要欄向け。改行・絵文字を適度に使い見やすく" : "150〜300文字、改行で読みやすく"}）",
   "hashtags": ["#タグ1", "#タグ2", ...（${captionPlatform === "Instagram" ? "15〜20個" : captionPlatform === "TikTok" ? "5〜8個" : "5〜10個"}）]
-}`
+}
+
+【院の情報】
+${buildClinicContext(clinicProfile)}`
           }, {
             role: "user",
             content: `動画の内容（書き起こし）:\n${context}\n\nプラットフォーム: ${captionPlatform}`
@@ -3006,6 +3035,7 @@ export default function VideoEditor() {
     { key: "slideshow", label: "スライドショー", icon: "🎞" },
     { key: "pip", label: "ワイプ", icon: "📺" },
     { key: "export", label: "書き出し", icon: "📤" },
+    { key: "clinic-profile", label: "院プロフィール", icon: "🏥" },
   ];
 
   if (!videoUrl) {
@@ -3013,7 +3043,15 @@ export default function VideoEditor() {
       <div className="min-h-screen flex flex-col items-center justify-center p-4">
         <div className="max-w-md w-full text-center">
           <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">VideoForge</h1>
-          <p className="text-gray-400 text-sm mb-8">AI動画エディタ</p>
+          <p className="text-gray-400 text-sm mb-4">AI動画エディタ</p>
+          {clinicProfile ? (
+            <div className="mb-6 inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-600/20 border border-indigo-500/30 rounded-full">
+              <span className="text-xs">🏥</span>
+              <span className="text-xs text-indigo-300 font-medium">{clinicProfile.clinicName}</span>
+            </div>
+          ) : (
+            <p className="text-[11px] text-gray-500 mb-6">院のプロフィールを設定するとAI生成が院に特化した内容になります</p>
+          )}
           <button onClick={() => fileInputRef.current?.click()} className="w-full p-8 border-2 border-dashed border-gray-600 rounded-2xl hover:border-indigo-500 hover:bg-indigo-500/5 transition-all group">
             <div className="text-5xl mb-4 group-hover:scale-110 transition-transform">🎥</div>
             <p className="text-lg font-medium text-gray-300 mb-1">動画をアップロード</p>
@@ -4919,6 +4957,42 @@ export default function VideoEditor() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Clinic Profile */}
+        {activeTool === "clinic-profile" && (
+          <div className="space-y-4">
+            <ClinicProfileSetup
+              profile={clinicProfile}
+              onSave={(p) => {
+                setClinicProfile(p);
+                setProgressMsg(`${p.clinicName}のプロフィールを保存しました。AI生成に反映されます。`);
+              }}
+            />
+            {clinicProfile && (
+              <div className="bg-gray-800 rounded-xl p-3 border border-gray-700">
+                <h4 className="text-xs font-bold text-gray-300 mb-2">現在の設定</h4>
+                <div className="space-y-1 text-[11px] text-gray-400">
+                  <p><span className="text-gray-500">院名:</span> {clinicProfile.clinicName}</p>
+                  {clinicProfile.area && <p><span className="text-gray-500">地域:</span> {clinicProfile.area}</p>}
+                  {clinicProfile.specialties.length > 0 && <p><span className="text-gray-500">得意:</span> {clinicProfile.specialties.join("、")}</p>}
+                  {clinicProfile.treatmentStyle && <p><span className="text-gray-500">手技:</span> {clinicProfile.treatmentStyle}</p>}
+                  {clinicProfile.target && <p><span className="text-gray-500">対象:</span> {clinicProfile.target}</p>}
+                  {clinicProfile.strengths && <p><span className="text-gray-500">強み:</span> {clinicProfile.strengths}</p>}
+                </div>
+                <button
+                  onClick={() => {
+                    try { localStorage.removeItem("videoforge_clinic_profile"); } catch {}
+                    setClinicProfile(null);
+                    setProgressMsg("プロフィールをリセットしました");
+                  }}
+                  className="mt-2 text-[10px] text-red-400 hover:text-red-300"
+                >
+                  プロフィールをリセット
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

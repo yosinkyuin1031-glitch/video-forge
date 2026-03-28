@@ -77,7 +77,18 @@ export const ASPECT_PRESETS: AspectRatioPreset[] = [
   { label: "Instagram広告", platform: "Instagram", ratio: "4:5", width: 1080, height: 1350 },
 ];
 
-export type EditorTool = "auto" | "select" | "text" | "trim" | "silence" | "bgm" | "subtitle" | "export" | "speed" | "split" | "filter" | "transition" | "sticker" | "keyframe" | "collage" | "slideshow" | "pip" | "mosaic" | "chromakey" | "template" | "logo" | "script";
+export type EditorTool = "auto" | "select" | "text" | "trim" | "silence" | "bgm" | "subtitle" | "export" | "speed" | "split" | "filter" | "transition" | "sticker" | "keyframe" | "collage" | "slideshow" | "pip" | "mosaic" | "chromakey" | "template" | "logo" | "script" | "clinic-profile";
+
+export interface ClinicProfile {
+  clinicName: string;
+  area: string;
+  specialties: string[];
+  treatmentStyle: string;
+  target: string;
+  strengths: string;
+  achievements: string;
+  tone: "professional" | "friendly" | "warm" | "energetic";
+}
 
 export type LogoPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right" | "center";
 
@@ -199,4 +210,58 @@ export interface ChromaKeySettings {
   keyColor: string; // hex color to remove, default "#00ff00"
   similarity: number; // 0.1-0.5, default 0.3
   blend: number; // 0-1, default 0.1
+}
+
+// ===== VIRAL VIDEO TEMPLATE LIBRARY =====
+
+export type SymptomCategory =
+  | "腰痛" | "肩こり" | "頭痛" | "膝痛" | "坐骨神経痛"
+  | "自律神経" | "睡眠" | "姿勢改善" | "首こり" | "ぎっくり腰"
+  | "五十肩" | "脊柱管狭窄症" | "産後" | "冷え性" | "めまい"
+  | "ストレートネック" | "股関節" | "ダイエット" | "小顔・美容"
+  | "肩甲骨" | "ヘルニア" | "美容鍼"
+  | "その他";
+
+export type VideoPlatform = "youtube" | "reels" | "tiktok" | "shorts";
+
+export type VideoFormat =
+  | "セルフケア指導" | "症状解説" | "施術ビフォーアフター"
+  | "患者の声" | "あるある共感" | "NG行動" | "ランキング"
+  | "豆知識" | "院紹介" | "日常Vlog" | "ASMR施術"
+  | "チャレンジ" | "院内ツアー" | "ノーカット施術" | "Q&A";
+
+export interface ViralScriptSegment {
+  type: "hook" | "problem" | "solution" | "demonstration" | "cta" | "bridge";
+  text: string;
+  duration: number; // seconds
+  note?: string; // 演出メモ（「ここでカメラに寄る」等）
+}
+
+export interface ViralTemplate {
+  id: string;
+  // メタ情報
+  name: string;
+  description: string;
+  symptom: SymptomCategory;
+  platform: VideoPlatform;
+  format: VideoFormat;
+  // バズ実績
+  buzzScore: number; // 1-5 (実績に基づく期待値)
+  referenceNote?: string; // 「〇〇系チャンネルで100万再生」等
+  // コンテンツ
+  titlePattern: string; // 「{症状}が{期間}で{結果}！{手法}を{ターゲット}が試した結果」
+  hookLine: string; // 最初の3秒のセリフ
+  scriptStructure: ViralScriptSegment[];
+  thumbnailTips: string; // サムネイルのコツ
+  hashtagStrategy: string[]; // 推奨ハッシュタグ
+  captionTemplate: string; // キャプションのテンプレ
+  // 動画設定
+  recommendedDuration: { min: number; max: number }; // 秒
+  aspectRatio: "16:9" | "9:16";
+  // テロップ設定
+  textOverlayPresets?: Partial<TextOverlay>[];
+  // 管理
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
 }
