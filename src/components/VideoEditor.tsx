@@ -3862,12 +3862,17 @@ ${buildClinicContext(clinicProfile)}`
         </div>
       )}
 
+      {/* Main Content: Vertical on mobile, Horizontal on desktop */}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+
+      {/* Left Side: Video Preview + Timeline */}
+      <div className="lg:flex-1 flex flex-col">
       {/* Video Preview */}
-      <div className="relative bg-black flex items-center justify-center" style={{ minHeight: "40vh" }}>
-        <video ref={videoRef} src={videoUrl} onLoadedMetadata={handleLoadedMetadata} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} className="max-w-full max-h-[30vh] sm:max-h-[40vh]" style={{ display: showCanvas ? "none" : "block" }} playsInline aria-label="動画プレビュー" />
+      <div className="relative bg-black flex items-center justify-center flex-1" style={{ minHeight: "30vh" }}>
+        <video ref={videoRef} src={videoUrl} onLoadedMetadata={handleLoadedMetadata} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} className="max-w-full max-h-[30vh] sm:max-h-[40vh] lg:max-h-[65vh]" style={{ display: showCanvas ? "none" : "block" }} playsInline aria-label="動画プレビュー" />
         <canvas
           ref={canvasRef}
-          className="max-w-full max-h-[40vh]"
+          className="max-w-full max-h-[30vh] sm:max-h-[40vh] lg:max-h-[65vh]"
           style={{ display: showCanvas ? "block" : "none", cursor: draggingId ? "grabbing" : "default" }}
           onMouseDown={handleCanvasMouseDown}
           onMouseMove={handleCanvasMouseMove}
@@ -3911,9 +3916,12 @@ ${buildClinicContext(clinicProfile)}`
           ))}
         </div>
       </div>
+      </div>{/* End Left Side */}
 
+      {/* Right Side: Tools */}
+      <div className="lg:w-[420px] lg:border-l lg:border-gray-800 flex flex-col bg-gray-950">
       {/* Tool Bar - Category Tabs */}
-      <nav className="bg-gray-900 border-t border-gray-800" aria-label="編集ツール">
+      <nav className="bg-gray-900 border-t lg:border-t-0 border-gray-800 flex-shrink-0" aria-label="編集ツール">
         <div className="flex gap-0 px-1 sm:px-2 pt-1.5 overflow-x-auto" role="tablist" aria-label="ツールカテゴリ">
           {TOOL_CATEGORIES.map((cat, i) => (
             <button key={cat.name} onClick={() => setActiveToolCategory(i)} role="tab" aria-selected={activeToolCategory === i} aria-controls={`toolpanel-${i}`}
@@ -6108,6 +6116,8 @@ ${buildClinicContext(clinicProfile)}`
           </div>
         )}
       </div>
+      </div>{/* End Right Side */}
+      </div>{/* End Main Content */}
     </div>
   );
 }
