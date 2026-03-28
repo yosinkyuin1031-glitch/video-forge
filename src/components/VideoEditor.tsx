@@ -983,12 +983,12 @@ export default function VideoEditor() {
   const [isListening, setIsListening] = useState(false);
   const [subtitleMode, setSubtitleMode] = useState<"browser" | "whisper">("browser");
   const [whisperApiKey, setWhisperApiKey] = useState<string>(() => {
-    try { return localStorage.getItem("videoforge_whisper_key") || ""; } catch { return ""; }
+    try { return sessionStorage.getItem("videoforge_whisper_key") || ""; } catch { return ""; }
   });
   const [whisperKeyInput, setWhisperKeyInput] = useState<string>("");
   const [showWhisperKey, setShowWhisperKey] = useState(false);
   const [whisperKeySaved, setWhisperKeySaved] = useState<boolean>(() => {
-    try { return !!localStorage.getItem("videoforge_whisper_key"); } catch { return false; }
+    try { return !!sessionStorage.getItem("videoforge_whisper_key"); } catch { return false; }
   });
 
   // Whisper settings
@@ -2741,7 +2741,7 @@ ${buildClinicContext(clinicProfile)}`
   const handleSaveWhisperKey = () => {
     const key = whisperKeyInput.trim();
     if (!key) return;
-    try { localStorage.setItem("videoforge_whisper_key", key); } catch {}
+    try { sessionStorage.setItem("videoforge_whisper_key", key); } catch {}
     setWhisperApiKey(key);
     setWhisperKeySaved(true);
     setWhisperKeyInput("");
@@ -3341,7 +3341,7 @@ ${buildClinicContext(clinicProfile)}`
         stepNum++;
         setAutoStep(stepNum);
         setProgressMsg(`Step ${stepNum}/${totalSteps}: 字幕を生成中...`);
-        const apiKey = (() => { try { return localStorage.getItem("videoforge_whisper_key") || ""; } catch { return ""; } })();
+        const apiKey = (() => { try { return sessionStorage.getItem("videoforge_whisper_key") || ""; } catch { return ""; } })();
         if (apiKey) {
           try {
             const { extractAudio: ea } = await import("@/lib/ffmpeg-utils");
@@ -4432,7 +4432,7 @@ ${buildClinicContext(clinicProfile)}`
               <div className="space-y-3">
                 <div className="bg-gray-800 rounded-xl p-3 space-y-2">
                   <label className="text-xs font-medium text-gray-300">OpenAI APIキー</label>
-                  <p className="text-[10px] text-gray-500">sk-で始まるキーを入力してください</p>
+                  <p className="text-[10px] text-gray-500">sk-で始まるキーを入力（ブラウザを閉じると消去されます）</p>
                   {whisperKeySaved ? (
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 flex-1">
