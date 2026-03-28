@@ -2741,13 +2741,13 @@ ${buildClinicContext(clinicProfile)}`
               setTextOverlays(newTexts);
               setEditingTextId(newTexts[0].id);
             }
-            // Switch to template tool to show applied result
-            setActiveTool("text");
-            setProgressMsg(`テンプレート「${tmpl.name}」を自動適用しました。テロップを編集してください。`);
+            // Switch to template tool to show checklist
+            setActiveTool("template");
+            setProgressMsg(`テンプレート「${tmpl.name}」のテロップを自動配置しました。チェックリストに沿って編集を進めてください。`);
           } else {
             // Template has script structure but no overlays - show the template tool
             setActiveTool("template");
-            setProgressMsg(`「${tmpl?.name || "テンプレート"}」を選択中。テンプレートツールから構成を確認できます。`);
+            setProgressMsg(`「${tmpl?.name || "テンプレート"}」を選択中。チェックリストに沿って編集を進めてください。`);
           }
         } catch {}
       }, 800);
@@ -3918,11 +3918,11 @@ ${buildClinicContext(clinicProfile)}`
                             <span className="text-[10px] px-2 py-0.5 bg-blue-900/50 rounded-full text-blue-300">約{totalDur}秒</span>
                             <span className="text-[10px] text-yellow-400">{"★".repeat(t.buzzScore)}{"☆".repeat(5 - t.buzzScore)}</span>
                           </div>
-                          {/* 撮影内容の簡易説明 */}
-                          <div className="bg-yellow-900/20 border border-yellow-800/30 rounded-lg px-2.5 py-1.5 mb-2">
-                            <p className="text-[10px] text-yellow-400 font-medium">📹 撮る内容:</p>
-                            <p className="text-[10px] text-yellow-300/80">
-                              {mainAction ? mainAction.note || mainAction.text.slice(0, 40) : t.scriptStructure.map((s) => s.type === "hook" ? "掴み" : s.type === "problem" ? "問題提起" : s.type === "solution" ? "解決策" : s.type === "demonstration" ? "実演" : s.type === "cta" ? "CTA" : "つなぎ").join(" → ")}
+                          {/* 自動で入る編集内容 */}
+                          <div className="bg-green-900/20 border border-green-800/30 rounded-lg px-2.5 py-1.5 mb-2">
+                            <p className="text-[10px] text-green-400 font-medium">✏️ 自動で入る編集:</p>
+                            <p className="text-[10px] text-green-300/80">
+                              {t.scriptStructure.map((s) => s.type === "hook" ? "掴みテロップ" : s.type === "problem" ? "問題提起" : s.type === "solution" ? "解決策" : s.type === "demonstration" ? "実演テロップ" : s.type === "cta" ? "CTA誘導" : "つなぎ").join(" → ")}
                             </p>
                           </div>
                         </div>
@@ -3964,44 +3964,29 @@ ${buildClinicContext(clinicProfile)}`
                         <span className="text-[10px] px-2 py-0.5 bg-indigo-800/50 rounded-full text-indigo-300">{tmpl.recommendedDuration.min}〜{tmpl.recommendedDuration.max}秒</span>
                       </div>
                     </div>
-                    {/* 撮影ガイド */}
+                    {/* 動画読み込み後の編集ガイド */}
                     <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                      <p className="text-xs font-bold text-yellow-400 mb-2">📹 こんな動画を撮ってください</p>
-                      <div className="space-y-2">
-                        {tmpl.scriptStructure.map((seg, i) => (
-                          <div key={i} className="flex gap-2">
-                            <div className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center">
-                              <span className="text-[9px] text-gray-300 font-bold">{i + 1}</span>
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
-                                  seg.type === "hook" ? "bg-red-900/50 text-red-300" :
-                                  seg.type === "problem" ? "bg-orange-900/50 text-orange-300" :
-                                  seg.type === "solution" ? "bg-blue-900/50 text-blue-300" :
-                                  seg.type === "demonstration" ? "bg-green-900/50 text-green-300" :
-                                  seg.type === "cta" ? "bg-purple-900/50 text-purple-300" :
-                                  "bg-gray-700 text-gray-300"
-                                }`}>
-                                  {seg.type === "hook" ? "掴み" : seg.type === "problem" ? "問題提起" : seg.type === "solution" ? "解決策" : seg.type === "demonstration" ? "実演" : seg.type === "cta" ? "誘導" : "つなぎ"}
-                                </span>
-                                <span className="text-[9px] text-gray-500">{seg.duration}秒</span>
-                              </div>
-                              <p className="text-[11px] text-gray-300 mt-0.5">{seg.text}</p>
-                              {seg.note && <p className="text-[10px] text-yellow-400/70 mt-0.5">💡 {seg.note}</p>}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="mt-3 pt-2 border-t border-gray-700">
-                        <p className="text-[10px] text-gray-500">合計: 約{tmpl.scriptStructure.reduce((sum, s) => sum + s.duration, 0)}秒 | この流れで撮影した動画をアップロードしてください</p>
+                      <p className="text-xs font-bold text-green-400 mb-2">✏️ 読み込み後、AIが自動でこう編集します</p>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <span className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center text-[9px] text-white font-bold flex-shrink-0">1</span>
+                          <span className="text-gray-300">テンプレートのテロップを<span className="text-indigo-300 font-medium">自動配置</span></span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <span className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center text-[9px] text-white font-bold flex-shrink-0">2</span>
+                          <span className="text-gray-300">テロップの<span className="text-yellow-300 font-medium">文字を自分の言葉に変更</span></span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <span className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center text-[9px] text-white font-bold flex-shrink-0">3</span>
+                          <span className="text-gray-300">不要な部分を<span className="text-red-300 font-medium">トリミング・無音カット</span></span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <span className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center text-[9px] text-white font-bold flex-shrink-0">4</span>
+                          <span className="text-gray-300">BGM追加 → <span className="text-green-300 font-medium">書き出し</span>して完成</span>
+                        </div>
                       </div>
                     </div>
-                    {/* サムネのコツ */}
-                    <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-3">
-                      <p className="text-[10px] font-bold text-orange-400 mb-1">🖼 サムネイルのコツ</p>
-                      <p className="text-[10px] text-gray-400">{tmpl.thumbnailTips}</p>
-                    </div>
+                    <p className="text-[10px] text-gray-500 text-center">撮影済みの動画をアップロードしてください</p>
                   </div>
                 );
               })()}
@@ -4353,6 +4338,52 @@ ${buildClinicContext(clinicProfile)}`
               <h3 className="text-sm font-bold text-gray-200 mb-1">テンプレート</h3>
               <p className="text-xs text-gray-500">ワンタップでテロップ・スタンプを自動配置。適用後にテキストを編集できます。</p>
             </div>
+            {/* 選択中テンプレートの編集チェックリスト */}
+            {selectedViralTemplate && (() => {
+              const tmpl = VIRAL_TEMPLATES.find((t) => t.id === selectedViralTemplate);
+              if (!tmpl) return null;
+              const hasTexts = textOverlays.length > 0;
+              const hasSubtitles = subtitles.length > 0;
+              const hasBgm = !!bgmFile;
+              const hasLegal = textOverlays.some((t) => t.text.includes("個人差") || t.text.includes("効果を保証"));
+              const hasCta = textOverlays.some((t) => t.text.includes("予約") || t.text.includes("プロフィール") || t.text.includes("LINE"));
+              const steps = [
+                { done: hasTexts, label: "テロップを配置する", action: "テロップツールで文字を編集", tool: "text" as EditorTool },
+                { done: hasSubtitles, label: "字幕を自動生成する", action: "字幕ツールでAI字幕生成", tool: "subtitle" as EditorTool },
+                { done: hasBgm, label: "BGMを追加する", action: "BGMツールで曲を選ぶ", tool: "bgm" as EditorTool },
+                { done: hasCta, label: "CTA（予約誘導）を入れる", action: "テロップツールのCTAプリセット", tool: "text" as EditorTool },
+                { done: hasLegal, label: "法的注意事項を入れる", action: "テロップツールの法的注意事項", tool: "text" as EditorTool },
+              ];
+              const doneCount = steps.filter((s) => s.done).length;
+              return (
+                <div className="bg-indigo-900/20 border border-indigo-700/40 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-indigo-300">📋 「{tmpl.name}」の編集チェックリスト</p>
+                    <span className="text-[10px] text-indigo-400">{doneCount}/{steps.length}</span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-1.5">
+                    <div className="h-1.5 rounded-full bg-indigo-500 transition-all" style={{ width: `${(doneCount/steps.length)*100}%` }} />
+                  </div>
+                  <div className="space-y-1">
+                    {steps.map((step, i) => (
+                      <button key={i} onClick={() => setActiveTool(step.tool)}
+                        className={`w-full flex items-center gap-2 text-left px-2 py-1.5 rounded-lg transition-colors ${step.done ? "bg-green-900/20" : "bg-gray-800/50 hover:bg-gray-800"}`}>
+                        <span className={`text-sm ${step.done ? "text-green-400" : "text-gray-600"}`}>{step.done ? "✅" : "⬜"}</span>
+                        <div>
+                          <p className={`text-[11px] font-medium ${step.done ? "text-green-400 line-through" : "text-gray-300"}`}>{step.label}</p>
+                          {!step.done && <p className="text-[9px] text-gray-500">{step.action}</p>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  {doneCount === steps.length && (
+                    <button onClick={() => setActiveTool("export")} className="w-full py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg text-xs font-bold hover:from-green-500 hover:to-emerald-500 transition-all">
+                      全チェック完了！書き出しへ →
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
             {templateSuccessMsg && (
               <div className="bg-green-900/70 border border-green-600 rounded-xl px-3 py-2 text-xs text-green-300 font-medium">
                 ✅ {templateSuccessMsg}
