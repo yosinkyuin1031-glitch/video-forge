@@ -1853,7 +1853,16 @@ export default function VideoEditor() {
     setThumbnailGenerating(true);
     const video = videoRef.current;
     const savedTime = video.currentTime;
-    const times = [duration * 0.25, duration * 0.5, duration * 0.75];
+    // 7フレーム: 冒頭/10%/25%/50%/75%/90%/現在位置
+    const times = [
+      Math.max(0.5, duration * 0.02),
+      duration * 0.1,
+      duration * 0.25,
+      duration * 0.5,
+      duration * 0.75,
+      duration * 0.9,
+      savedTime,
+    ].filter((t, i, arr) => arr.indexOf(t) === i); // 重複除去
     const frames: string[] = [];
     for (const time of times) {
       video.currentTime = time;
@@ -5825,18 +5834,17 @@ ${buildClinicContext(clinicProfile)}`
                   disabled={thumbnailGenerating || !duration}
                   className="w-full py-2 bg-gray-800 text-gray-300 rounded-xl text-xs font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
                 >
-                  {thumbnailGenerating ? "フレームを抽出中..." : "最適なシーンを選択（25%・50%・75%）"}
+                  {thumbnailGenerating ? "フレームを抽出中..." : "ベストシーンを選択（7カット自動抽出）"}
                 </button>
                 {thumbnailFrames.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-4 gap-1.5">
                     {thumbnailFrames.map((frame, i) => (
                       <div
                         key={i}
                         onClick={() => setSelectedThumbnailFrame(i)}
-                        className={`cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${selectedThumbnailFrame === i ? "border-indigo-500" : "border-gray-700 hover:border-gray-500"}`}
+                        className={`cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${selectedThumbnailFrame === i ? "border-indigo-500 ring-1 ring-indigo-400" : "border-gray-700 hover:border-gray-500"}`}
                       >
                         <img src={frame} alt={`フレーム${i + 1}`} className="w-full h-auto" />
-                        <p className="text-[9px] text-center text-gray-500 py-0.5">{i === 0 ? "25%" : i === 1 ? "50%" : "75%"}</p>
                       </div>
                     ))}
                   </div>
