@@ -1221,14 +1221,37 @@ export default function VideoEditor() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore when typing in input/textarea
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
       if ((e.ctrlKey || e.metaKey) && e.key === "z") {
         if (e.shiftKey) { e.preventDefault(); handleRedo(); }
         else { e.preventDefault(); handleUndo(); }
       }
+      // Space: play/pause
+      if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        if (videoRef.current) {
+          if (videoRef.current.paused) { videoRef.current.play(); setIsPlaying(true); }
+          else { videoRef.current.pause(); setIsPlaying(false); }
+        }
+      }
+      // Arrow keys: seek
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        const step = e.shiftKey ? 1 : 5;
+        if (videoRef.current) { videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - step); setCurrentTime(videoRef.current.currentTime); }
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        const step = e.shiftKey ? 1 : 5;
+        if (videoRef.current) { videoRef.current.currentTime = Math.min(duration, videoRef.current.currentTime + step); setCurrentTime(videoRef.current.currentTime); }
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, duration]);
 
   // ===== SPEED =====
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -2797,6 +2820,17 @@ ${buildClinicContext(clinicProfile)}`
     pushHistory({ textOverlays: newOverlays, subtitles, silentSegments, videoUrl, stickers, filterSettings, transitionIn, transitionOut });
   };
 
+  const duplicateTextOverlay = (id: string) => {
+    const source = textOverlays.find((t) => t.id === id);
+    if (!source) return;
+    const newId = `text-dup-${Date.now()}`;
+    const duplicate: TextOverlay = { ...source, id: newId, y: Math.min(100, source.y + 5) };
+    const newOverlays = [...textOverlays, duplicate];
+    setTextOverlays(newOverlays);
+    setEditingTextId(newId);
+    pushHistory({ textOverlays: newOverlays, subtitles, silentSegments, videoUrl, stickers, filterSettings, transitionIn, transitionOut });
+  };
+
   const startVoiceRecognition = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) { setProgressMsg("このブラウザは音声認識に対応していません。Chromeをお使いください。"); return; }
@@ -3944,6 +3978,7 @@ ${buildClinicContext(clinicProfile)}`
         <div className="flex items-center gap-3 mb-2">
           <button onClick={togglePlay} className="text-white text-sm">{isPlaying ? "⏸" : "▶"}</button>
           <span className="text-xs text-gray-400 font-mono">{formatTime(currentTime)} / {formatTime(duration)}</span>
+          <span className="hidden lg:inline text-[9px] text-gray-600 ml-auto" title="Space:再生/停止  ←→:5秒送り  Shift+←→:1秒送り  Ctrl+Z:戻す  Ctrl+Shift+Z:やり直す">⌨ Space/←→/Ctrl+Z</span>
         </div>
         <div className="relative">
           <input type="range" min={0} max={duration} step={0.01} value={currentTime} onChange={(e) => handleSeek(parseFloat(e.target.value))} className="w-full" />
@@ -4579,7 +4614,10 @@ ${buildClinicContext(clinicProfile)}`
                   <button onClick={() => setEditingTextId(overlay.id === editingTextId ? null : overlay.id)} className="text-xs text-indigo-400">
                     {overlay.id === editingTextId ? "閉じる" : "編集"}
                   </button>
-                  <button onClick={() => deleteTextOverlay(overlay.id)} className="text-xs text-red-400 hover:text-red-300">削除</button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => duplicateTextOverlay(overlay.id)} className="text-xs text-gray-400 hover:text-gray-200">複製</button>
+                    <button onClick={() => deleteTextOverlay(overlay.id)} className="text-xs text-red-400 hover:text-red-300">削除</button>
+                  </div>
                 </div>
                 {editingTextId === overlay.id && (
                   <div className="space-y-3">
