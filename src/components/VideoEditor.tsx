@@ -1918,15 +1918,24 @@ export default function VideoEditor() {
     applyThumbnailOverlays(ctx, thumbCanvas);
   };
 
+  const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(null);
+
   const applyThumbnailOverlays = (ctx: CanvasRenderingContext2D, thumbCanvas: HTMLCanvasElement) => {
     // テキスト描画
     applyThumbnailText(ctx, thumbCanvas, false);
     // マーク描画
     drawThumbnailMarks(ctx);
-    // ダウンロード
+    // プレビュー用URL生成（ダウンロードはボタンで別途）
+    const dataUrl = thumbCanvas.toDataURL('image/png');
+    if (thumbnailPreviewUrl) URL.revokeObjectURL(thumbnailPreviewUrl);
+    setThumbnailPreviewUrl(dataUrl);
+  };
+
+  const handleDownloadThumbnail = () => {
+    if (!thumbnailPreviewUrl) return;
     const link = document.createElement('a');
     link.download = `thumbnail_${Date.now()}.png`;
-    link.href = thumbCanvas.toDataURL('image/png');
+    link.href = thumbnailPreviewUrl;
     link.click();
   };
 
@@ -5973,10 +5982,23 @@ ${buildClinicContext(clinicProfile)}`
 
                 <button
                   onClick={handleGenerateThumbnail}
-                  className="w-full py-2.5 bg-orange-700 text-white rounded-xl text-sm font-bold hover:bg-orange-600 transition-colors"
+                  className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-500 transition-colors"
                 >
-                  サムネイルをダウンロード (1280×720)
+                  プレビューを生成 (1280x720)
                 </button>
+                {thumbnailPreviewUrl && (
+                  <div className="space-y-2">
+                    <div className="rounded-lg overflow-hidden border border-gray-700">
+                      <img src={thumbnailPreviewUrl} alt="サムネイルプレビュー" className="w-full h-auto" />
+                    </div>
+                    <button
+                      onClick={handleDownloadThumbnail}
+                      className="w-full py-2.5 bg-orange-700 text-white rounded-xl text-sm font-bold hover:bg-orange-600 transition-colors"
+                    >
+                      サムネイルをダウンロード
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
