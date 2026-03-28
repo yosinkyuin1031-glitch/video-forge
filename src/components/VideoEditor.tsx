@@ -5,6 +5,7 @@ import { TextOverlay, SubtitleEntry, EditorTool, ASPECT_PRESETS, FONT_OPTIONS, C
 import { detectSilence, removeSilence, trimVideo, addBgm, exportWithAspectRatio, SilentSegment, changeSpeed, splitAndReorder, applyFilters, applyTransitions, createCollage, createSlideshow, applyPip, exportGif, applyMosaicAreas, applyChromaKey, extractAudio, applyLogo } from "@/lib/ffmpeg-utils";
 import ClinicProfileSetup from "./ClinicProfileSetup";
 import ViralTemplateGallery from "./ViralTemplateGallery";
+import { VIRAL_TEMPLATES } from "@/lib/viral-templates";
 
 // ===== BGM LIBRARY =====
 type BgmItemKey =
@@ -964,6 +965,11 @@ export default function VideoEditor() {
   const [activeToolCategory, setActiveToolCategory] = useState(0);
   const [processing, setProcessing] = useState(false);
   const [progressMsg, setProgressMsg] = useState("");
+
+  // Top screen guided flow
+  const [topStep, setTopStep] = useState<"home" | "symptom" | "template" | "upload" | "clinic-setup">("home");
+  const [selectedSymptom, setSelectedSymptom] = useState<string | null>(null);
+  const [selectedViralTemplate, setSelectedViralTemplate] = useState<string | null>(null);
 
   // Silence detection
   const [silentSegments, setSilentSegments] = useState<SilentSegment[]>([]);
@@ -2579,8 +2585,11 @@ ${buildClinicContext(clinicProfile)}`
   const handleVideoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (selectedViralTemplate) {
+      pendingViralTemplateRef.current = selectedViralTemplate;
+    }
     loadVideoFile(file);
-  }, [loadVideoFile]);
+  }, [loadVideoFile, selectedViralTemplate]);
 
   const [isDragging, setIsDragging] = useState(false);
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -2588,11 +2597,56 @@ ${buildClinicContext(clinicProfile)}`
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith("video/")) {
+      if (selectedViralTemplate) {
+        pendingViralTemplateRef.current = selectedViralTemplate;
+      }
       loadVideoFile(file);
     }
-  }, [loadVideoFile]);
+  }, [loadVideoFile, selectedViralTemplate]);
   const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); }, []);
   const handleDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); }, []);
+
+  // Auto-apply viral template after video loads (guided flow)
+  const pendingViralTemplateRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (videoUrl && pendingViralTemplateRef.current) {
+      const templateId = pendingViralTemplateRef.current;
+      pendingViralTemplateRef.current = null;
+      // Apply template after small delay to let duration load
+      const timer = setTimeout(() => {
+        try {
+          const tmpl = VIRAL_TEMPLATES.find((t) => t.id === templateId);
+          if (tmpl && tmpl.textOverlayPresets) {
+            const newTexts: TextOverlay[] = tmpl.textOverlayPresets.map((p: any, i: number) => ({
+              id: `viral-${Date.now()}-${i}`,
+              text: (p.text || "").replace("{院名}", clinicProfile?.clinicName || "当院").replace("{地域}", clinicProfile?.area || ""),
+              x: p.x ?? 50, y: p.y ?? (20 + i * 15),
+              fontSize: p.fontSize ?? 28, fontFamily: p.fontFamily ?? "sans-serif",
+              color: p.color ?? "#ffffff", bgColor: p.bgColor ?? "rgba(0,0,0,0.6)",
+              bold: p.bold ?? true, italic: false,
+              outlineColor: p.outlineColor ?? "#000000", outlineWidth: p.outlineWidth ?? 0,
+              shadowColor: "transparent", shadowBlur: 0, shadowOffsetX: 0, shadowOffsetY: 0,
+              startTime: 0, endTime: duration || 30,
+              animation: (p.animation ?? "fade-in") as TextAnimation,
+              keyframes: [],
+            }));
+            if (newTexts.length > 0) {
+              setTextOverlays(newTexts);
+              setEditingTextId(newTexts[0].id);
+            }
+            // Switch to template tool to show applied result
+            setActiveTool("text");
+            setProgressMsg(`テンプレート「${tmpl.name}」を自動適用しました。テロップを編集してください。`);
+          } else {
+            // Template has script structure but no overlays - show the template tool
+            setActiveTool("template");
+            setProgressMsg(`「${tmpl?.name || "テンプレート"}」を選択中。テンプレートツールから構成を確認できます。`);
+          }
+        } catch {}
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [videoUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-subtitle: trigger Whisper when video loads and auto mode is on
   const autoSubtitleTriggered = useRef(false);
@@ -3590,37 +3644,185 @@ ${buildClinicContext(clinicProfile)}`
     if (catIdx !== undefined) setActiveToolCategory(catIdx);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const TOP_SYMPTOMS = [
+    { label: "腰痛", icon: "🦴" }, { label: "肩こり", icon: "💪" }, { label: "頭痛", icon: "🤕" },
+    { label: "膝痛", icon: "🦵" }, { label: "坐骨神経痛", icon: "⚡" }, { label: "自律神経", icon: "🧠" },
+    { label: "姿勢改善", icon: "🧍" }, { label: "首こり", icon: "🫠" }, { label: "五十肩", icon: "🙋" },
+    { label: "産後", icon: "🤱" }, { label: "小顔・美容", icon: "✨" }, { label: "ダイエット", icon: "📏" },
+    { label: "その他", icon: "📋" },
+  ];
+
   if (!videoUrl) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-3 sm:p-4"
+      <div className="min-h-screen flex flex-col bg-gray-950"
         onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}>
-        <div className="max-w-md w-full text-center px-2 sm:px-0">
-          <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">VideoForge</h1>
-          <p className="text-gray-400 text-sm mb-4">AI動画エディタ</p>
-          {clinicProfile ? (
-            <div className="mb-6 inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-600/20 border border-indigo-500/30 rounded-full">
-              <span className="text-xs">🏥</span>
-              <span className="text-xs text-indigo-300 font-medium">{clinicProfile.clinicName}</span>
+
+        {/* Clinic Setup Modal */}
+        {topStep === "clinic-setup" && (
+          <div className="min-h-screen flex flex-col items-center justify-center p-4">
+            <div className="max-w-md w-full">
+              <button onClick={() => setTopStep("home")} className="text-xs text-gray-500 hover:text-gray-300 mb-4">← 戻る</button>
+              <ClinicProfileSetup
+                profile={clinicProfile}
+                onSave={(p) => {
+                  setClinicProfile(p);
+                  setTopStep("home");
+                }}
+              />
             </div>
-          ) : (
-            <p className="text-[11px] text-gray-500 mb-6">院のプロフィールを設定するとAI生成が院に特化した内容になります</p>
-          )}
-          <button onClick={() => fileInputRef.current?.click()}
-            className={`w-full p-8 border-2 border-dashed rounded-2xl transition-all group ${isDragging ? "border-indigo-400 bg-indigo-500/10 scale-105" : "border-gray-600 hover:border-indigo-500 hover:bg-indigo-500/5"}`}>
-            <div className="text-5xl mb-4 group-hover:scale-110 transition-transform">{isDragging ? "📂" : "🎥"}</div>
-            <p className="text-lg font-medium text-gray-300 mb-1">{isDragging ? "ここにドロップ" : "動画をアップロード"}</p>
-            <p className="text-sm text-gray-500">{isDragging ? "動画ファイルを離してください" : "クリック or ドラッグ&ドロップ（MP4, MOV, WebM）"}</p>
-          </button>
-          <input ref={fileInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
-          <div className="mt-8 grid grid-cols-3 gap-3">
-            {[{ icon: "✂️", label: "自動無音カット" }, { icon: "💬", label: "音声字幕" }, { icon: "T", label: "テロップ" }, { icon: "🎵", label: "BGM追加" }, { icon: "🎬", label: "トリミング" }, { icon: "📤", label: "SNS書き出し" }].map((f) => (
-              <div key={f.label} className="bg-gray-800/50 rounded-xl p-3 text-center">
-                <div className="text-xl mb-1">{f.icon}</div>
-                <p className="text-[11px] text-gray-400">{f.label}</p>
-              </div>
-            ))}
           </div>
-        </div>
+        )}
+
+        {/* Home */}
+        {topStep === "home" && (
+          <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6">
+            <div className="max-w-lg w-full text-center">
+              {/* Branding */}
+              <div className="mb-2">
+                <span className="text-xs font-bold text-indigo-400 tracking-widest">VIDEOFORGE</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-black text-white mb-2 leading-tight">
+                治療院の集客動画を<br /><span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">3分で作る</span>
+              </h1>
+              <p className="text-sm text-gray-400 mb-6">症状を選ぶ → テンプレを選ぶ → 動画を入れる → 完成</p>
+
+              {/* Clinic Profile Badge */}
+              {clinicProfile ? (
+                <button onClick={() => setTopStep("clinic-setup")} className="mb-6 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600/20 border border-indigo-500/30 rounded-full hover:bg-indigo-600/30 transition-colors">
+                  <span className="text-sm">🏥</span>
+                  <span className="text-xs text-indigo-300 font-medium">{clinicProfile.clinicName}</span>
+                  <span className="text-[10px] text-gray-500">変更</span>
+                </button>
+              ) : (
+                <button onClick={() => setTopStep("clinic-setup")} className="mb-6 inline-flex items-center gap-2 px-4 py-2.5 bg-yellow-600/20 border border-yellow-500/30 rounded-xl hover:bg-yellow-600/30 transition-colors">
+                  <span className="text-sm">🏥</span>
+                  <span className="text-xs text-yellow-300 font-medium">まず院のプロフィールを設定</span>
+                  <span className="text-[10px] text-yellow-500">→ AI生成が院に特化します</span>
+                </button>
+              )}
+
+              {/* Main CTA: Guided Flow */}
+              <button onClick={() => setTopStep("symptom")}
+                className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl text-base font-bold hover:from-indigo-500 hover:to-purple-500 transition-all shadow-lg shadow-indigo-500/25 mb-3">
+                症状を選んで動画を作る
+              </button>
+
+              {/* Sub CTA: Free mode */}
+              <button onClick={() => { fileInputRef.current?.click(); }}
+                className="w-full py-3 bg-gray-800 text-gray-300 rounded-2xl text-sm font-medium hover:bg-gray-700 transition-colors mb-6">
+                自由に編集する（動画をアップロード）
+              </button>
+              <input ref={fileInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
+
+              {/* Features */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                {[
+                  { icon: "📋", label: "37種の\nバズテンプレ" },
+                  { icon: "⚖️", label: "法的注意\n自動挿入" },
+                  { icon: "💬", label: "AI字幕\n自動生成" },
+                  { icon: "📱", label: "SNS最適\n書き出し" },
+                  { icon: "🔚", label: "CTA/LINE\n誘導カード" },
+                  { icon: "🖼", label: "サムネイル\n自動生成" },
+                ].map((f) => (
+                  <div key={f.label} className="bg-gray-800/50 rounded-xl p-2.5 sm:p-3 text-center">
+                    <div className="text-lg sm:text-xl mb-1">{f.icon}</div>
+                    <p className="text-[10px] sm:text-[11px] text-gray-400 whitespace-pre-line leading-tight">{f.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 1: Symptom Selection */}
+        {topStep === "symptom" && (
+          <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6">
+            <div className="max-w-lg w-full">
+              <button onClick={() => setTopStep("home")} className="text-xs text-gray-500 hover:text-gray-300 mb-4">← 戻る</button>
+              <div className="text-center mb-6">
+                <p className="text-xs text-indigo-400 font-bold mb-1">STEP 1 / 3</p>
+                <h2 className="text-xl sm:text-2xl font-bold text-white">どの症状の動画を作りますか？</h2>
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {TOP_SYMPTOMS.map((s) => (
+                  <button key={s.label} onClick={() => { setSelectedSymptom(s.label); setTopStep("template"); }}
+                    className="flex flex-col items-center gap-1.5 p-3 bg-gray-800 rounded-xl hover:bg-gray-700 hover:border-indigo-500 border border-gray-700 transition-all">
+                    <span className="text-2xl">{s.icon}</span>
+                    <span className="text-xs text-gray-300 font-medium">{s.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: Template Selection */}
+        {topStep === "template" && (
+          <div className="flex-1 flex flex-col p-4 sm:p-6 overflow-y-auto">
+            <div className="max-w-lg w-full mx-auto">
+              <button onClick={() => setTopStep("symptom")} className="text-xs text-gray-500 hover:text-gray-300 mb-4">← 症状を選び直す</button>
+              <div className="text-center mb-4">
+                <p className="text-xs text-indigo-400 font-bold mb-1">STEP 2 / 3</p>
+                <h2 className="text-xl sm:text-2xl font-bold text-white">
+                  <span className="text-indigo-400">{selectedSymptom}</span>のテンプレートを選択
+                </h2>
+              </div>
+              <div className="space-y-2 mb-4">
+                {(() => {
+                  const filtered = VIRAL_TEMPLATES.filter((t) =>
+                    selectedSymptom === "その他" || t.symptom === selectedSymptom
+                  );
+                  if (filtered.length === 0) return <p className="text-sm text-gray-500 text-center py-8">この症状のテンプレートは準備中です。「自由に編集」をお使いください。</p>;
+                  return filtered.map((t) => (
+                    <button key={t.id} onClick={() => { setSelectedViralTemplate(t.id); setTopStep("upload"); }}
+                      className={`w-full text-left p-4 rounded-xl border transition-all ${selectedViralTemplate === t.id ? "border-indigo-500 bg-indigo-900/30" : "border-gray-700 bg-gray-800 hover:border-indigo-500/50 hover:bg-gray-750"}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <p className="text-sm font-bold text-white mb-1">{t.name}</p>
+                          <p className="text-xs text-gray-400 mb-2">{t.description}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] px-2 py-0.5 bg-gray-700 rounded-full text-gray-300">{t.platform}</span>
+                            <span className="text-[10px] px-2 py-0.5 bg-gray-700 rounded-full text-gray-300">{t.format}</span>
+                            <span className="text-[10px] text-yellow-400">{"★".repeat(t.buzzScore)}{"☆".repeat(5 - t.buzzScore)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-2 bg-gray-900/50 rounded-lg px-3 py-2">
+                        <p className="text-[10px] text-gray-500 mb-0.5">冒頭の掴み:</p>
+                        <p className="text-xs text-indigo-300 font-medium">{t.hookLine}</p>
+                      </div>
+                    </button>
+                  ));
+                })()}
+              </div>
+              <button onClick={() => { setTopStep("upload"); setSelectedViralTemplate(null); }}
+                className="w-full py-2.5 bg-gray-800 text-gray-400 rounded-xl text-xs hover:bg-gray-700 transition-colors">
+                テンプレなしで自由に編集
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Upload */}
+        {topStep === "upload" && (
+          <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6">
+            <div className="max-w-md w-full text-center">
+              <button onClick={() => setTopStep("template")} className="text-xs text-gray-500 hover:text-gray-300 mb-4 block text-left">← テンプレートを選び直す</button>
+              <p className="text-xs text-indigo-400 font-bold mb-1">STEP 3 / 3</p>
+              <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">動画をアップロード</h2>
+              {selectedViralTemplate && (
+                <p className="text-xs text-gray-400 mb-4">テンプレートが自動適用されます</p>
+              )}
+              <button onClick={() => fileInputRef.current?.click()}
+                className={`w-full p-8 border-2 border-dashed rounded-2xl transition-all group ${isDragging ? "border-indigo-400 bg-indigo-500/10 scale-105" : "border-gray-600 hover:border-indigo-500 hover:bg-indigo-500/5"}`}>
+                <div className="text-5xl mb-4 group-hover:scale-110 transition-transform">{isDragging ? "📂" : "🎥"}</div>
+                <p className="text-lg font-medium text-gray-300 mb-1">{isDragging ? "ここにドロップ" : "動画をアップロード"}</p>
+                <p className="text-sm text-gray-500">{isDragging ? "動画ファイルを離してください" : "クリック or ドラッグ&ドロップ（MP4, MOV, WebM）"}</p>
+              </button>
+              <input ref={fileInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
+            </div>
+          </div>
+        )}
       </div>
     );
   }
